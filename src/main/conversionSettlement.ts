@@ -50,9 +50,14 @@ export interface Settlement {
  *
  * An original is trashable only when every entry that pointed at it now
  * points at the conversion: one entry left behind — skipped because it moved
- * in rekordbox since the library was loaded — still needs the FLAC.
+ * in rekordbox since the library was loaded, or outside the playlist being
+ * converted (`stillUsed`) — still needs the FLAC.
  */
-export function settleConversions(converted: ConvertedFile[], updatedTrackIds: Set<string>): Settlement {
+export function settleConversions(
+  converted: ConvertedFile[],
+  updatedTrackIds: Set<string>,
+  stillUsed: Set<string> = new Set()
+): Settlement {
   const settlement: Settlement = { kept: [], orphaned: [], trashable: [] };
   for (const file of converted) {
     const updated = file.trackIds.filter((id) => updatedTrackIds.has(id));
@@ -61,9 +66,28 @@ export function settleConversions(converted: ConvertedFile[], updatedTrackIds: S
       continue;
     }
     settlement.kept.push(file);
-    if (updated.length === file.trackIds.length) { settlement.trashable.push(file.oldLocation); }
+    if (updated.length === file.trackIds.length && !stillUsed.has(file.oldLocation.normalize('NFC'))) {
+      settlement.trashable.push(file.oldLocation);
+    }
   }
   return settlement;
+}
+
+/**
+ * Where the entries that were not re-pointed still point, in NFC. A
+ * conversion limited to one playlist can meet a FLAC that another entry,
+ * outside the playlist, also uses; that entry still needs the file, so the
+ * file must not go to the trash with the playlist's.
+ */
+export function locationsStillUsed(
+  allTracks: Array<{ id: string; location: string }>,
+  updatedTrackIds: Set<string>
+): Set<string> {
+  return new Set(
+    allTracks
+      .filter((t) => !updatedTrackIds.has(t.id) && t.location)
+      .map((t) => t.location.normalize('NFC'))
+  );
 }
 
 /** The `Kind` rekordbox writes in its XML for each format. */

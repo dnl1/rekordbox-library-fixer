@@ -153,7 +153,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // FLAC → AIFF / WAV
-  convertFlacPreview: (data: { tracks: TrackPayload[]; format: ConversionFormatPayload }) =>
+  convertFlacPreview: (data: { tracks: TrackPayload[]; format: ConversionFormatPayload; scopeTrackIds?: string[] }) =>
     ipcRenderer.invoke('convert-flac-preview', data),
   convertFlac: (data: ConvertFlacRequest) => ipcRenderer.invoke('convert-flac', data),
   cancelConvertFlac: (operationId: string) =>

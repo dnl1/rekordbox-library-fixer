@@ -4,7 +4,7 @@ import { runtime, safeConsole } from '../runtime';
 import { resolveFfmpegPath } from '../ffmpegBinary';
 import { FlacConverter, planConversions, isFlacLocation, type ConversionFormat } from '../flacConverter';
 import { writeConversionsToDb } from '../rekordboxDbConverter';
-import { writePlansFor, settleConversions, applyConversionsToLibrary } from '../conversionSettlement';
+import { writePlansFor, settleConversions, applyConversionsToLibrary, locationsStillUsed } from '../conversionSettlement';
 import { backupDatabaseFile } from '../backupDatabase';
 import { assertWritableLibraryPath, isRekordboxDatabasePath } from '../librarySource';
 import { isRekordboxRunning } from '../rekordboxRunning';
@@ -44,6 +44,13 @@ function onThisDisk(tracks: TrackPayload[]) {
   };
 }
 
+/** The entries a run is limited to; all of them when no scope is given. */
+function inScope(tracks: TrackPayload[], scopeTrackIds?: string[]): TrackPayload[] {
+  if (!scopeTrackIds) { return tracks; }
+  const ids = new Set(scopeTrackIds);
+  return tracks.filter((t) => ids.has(t.id));
+}
+
 const isRegularFile = (p: string): boolean => {
   try { return fs.statSync(p).isFile(); } catch { return false; }
 };
@@ -66,10 +73,11 @@ const removeQuietly = (files: string[]) => {
  * touched.
  */
 export function registerConversionIpc(): void {
-  ipcMain.handle('convert-flac-preview', async (_e, { tracks, format }: {
-    tracks: TrackPayload[]; format: ConversionFormat;
+  ipcMain.handle('convert-flac-preview', async (_e, { tracks: all, format, scopeTrackIds }: {
+    tracks: TrackPayload[]; format: ConversionFormat; scopeTrackIds?: string[];
   }): Promise<IpcResult<ConvertFlacPreview>> => {
     try {
+      const tracks = inScope(all, scopeTrackIds);
       const { hostTracks } = onThisDisk(tracks);
       const plan = planConversions(hostTracks, format);
       const flac = tracks.filter((t) => isFlacLocation(t.location));
@@ -90,7 +98,8 @@ export function registerConversionIpc(): void {
   });
 
   ipcMain.handle('convert-flac', async (event, request: ConvertFlacRequest): Promise<IpcResult<ConvertFlacSummary>> => {
-    const { operationId, tracks, libraryPath, dbKey, format, trashOriginals } = request;
+    const { operationId, tracks: allTracks, scopeTrackIds, libraryPath, dbKey, format, trashOriginals } = request;
+    const tracks = inScope(allTracks, scopeTrackIds);
     const ffmpeg = ffmpegPath();
     if (!ffmpeg) {
       return { success: false, error: 'This build of the app has no ffmpeg for this platform, so it cannot convert.' };
@@ -162,7 +171,8 @@ export function registerConversionIpc(): void {
         }
       }
 
-      const settlement = settleConversions(result.converted, updatedTrackIds);
+      const stillUsed = locationsStillUsed(onThisDisk(allTracks).hostTracks, updatedTrackIds);
+      const settlement = settleConversions(result.converted, updatedTrackIds, stillUsed);
       removeQuietly(settlement.orphaned);
 
       const trashed: string[] = [];

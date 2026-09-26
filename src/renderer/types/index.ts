@@ -245,7 +245,7 @@ declare global {
       cancelConsolidate?: (operationId: string) => Promise<any>;
       onConsolidateProgress?: (callback: (progress: any) => void) => () => void;
       // FLAC → AIFF / WAV
-      convertFlacPreview: (data: { tracks: any[]; format: ConversionFormatPayload }) => Promise<IpcResult<ConvertFlacPreview>>;
+      convertFlacPreview: (data: { tracks: any[]; format: ConversionFormatPayload; scopeTrackIds?: string[] }) => Promise<IpcResult<ConvertFlacPreview>>;
       convertFlac: (data: ConvertFlacRequest) => Promise<IpcResult<ConvertFlacSummary>>;
       cancelConvertFlac: (operationId: string) => Promise<{ success: boolean }>;
       onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => () => void;

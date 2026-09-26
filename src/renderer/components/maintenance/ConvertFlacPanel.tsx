@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle, Play, X } from 'lucide-react';
 import { useAppContext } from '../../AppWithRouter';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { formatFileSize } from '../../utils';
+import { playlistScopes } from '../../utils/playlistScopes';
 import {
   subscribeConversion, getConversionSnapshot, startConversion, cancelConversion, resetConversionSession,
 } from '../../conversion/convertFlacSession';
@@ -44,6 +45,12 @@ export const ConvertFlacPanel: React.FC = () => {
 
   const isDatabase = libraryPath.toLowerCase().endsWith('.db');
   const tracks = useMemo(() => (libraryData ? Array.from(libraryData.tracks.values()) : []), [libraryData]);
+  const scopes = useMemo(() => playlistScopes(libraryData?.playlists ?? []), [libraryData]);
+  // '' is the whole library. A playlist is the usual case: what gets converted
+  // is what is about to be exported to a USB stick.
+  const [scopeKey, setScopeKey] = useState('');
+  const scope = scopes.find((s) => s.key === scopeKey);
+  const scopeTrackIds = scope?.trackIds;
 
   const reset = useCallback(() => {
     resetConversionSession();
@@ -54,7 +61,7 @@ export const ConvertFlacPanel: React.FC = () => {
     resetConversionSession();
     setLocalPhase('previewing');
     setLocalError(null);
-    const res = await window.electronAPI.convertFlacPreview({ tracks, format });
+    const res = await window.electronAPI.convertFlacPreview({ tracks, format, scopeTrackIds });
     if (res.success && res.data) {
       setPreview(res.data);
       setLocalPhase('previewed');
@@ -62,7 +69,7 @@ export const ConvertFlacPanel: React.FC = () => {
       setLocalError(res.error ?? 'Preview failed');
       setLocalPhase('idle');
     }
-  }, [tracks, format]);
+  }, [tracks, format, scopeTrackIds]);
 
   const runConvert = useCallback(async () => {
     if (isDatabase) {
@@ -80,6 +87,7 @@ export const ConvertFlacPanel: React.FC = () => {
     // library reload below replaces the page — so it touches no local state.
     const res = await startConversion({
       tracks,
+      scopeTrackIds,
       libraryPath,
       dbKey: isDatabase ? useSettingsStore.getState().rekordboxDbKey : undefined,
       format,
@@ -102,7 +110,7 @@ export const ConvertFlacPanel: React.FC = () => {
       { important: true }
     );
     if (s.tracksUpdated > 0) { onLoadLibrary?.(libraryPath); }
-  }, [isDatabase, tracks, libraryPath, format, trashOriginals, showNotification, onLoadLibrary]);
+  }, [isDatabase, tracks, scopeTrackIds, libraryPath, format, trashOriginals, showNotification, onLoadLibrary]);
 
   const cancel = useCallback(() => { void cancelConversion(); }, []);
 
@@ -121,6 +129,28 @@ export const ConvertFlacPanel: React.FC = () => {
         <p className="text-sm text-te-grey-400 italic">Load a library first to convert.</p>
       ) : (
         <div className="space-y-te-md">
+          <div>
+            <label htmlFor="convert-scope" className="block text-xs font-medium text-te-grey-600 mb-1 uppercase">Convert</label>
+            <select
+              id="convert-scope"
+              value={scopeKey}
+              disabled={phase === 'running'}
+              onChange={(e) => { setScopeKey(e.target.value); reset(); }}
+              className="w-full border border-te-grey-300 rounded-te px-3 py-2 text-sm font-te-mono bg-te-cream focus:outline-none focus:border-te-orange"
+            >
+              <option value="">The whole library</option>
+              {scopes.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.isFolder ? 'Folder' : 'Playlist'}: {s.label} ({s.trackIds.length})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs font-te-mono text-te-grey-400 mt-1">
+              Converting before a USB export? Pick the playlist you are exporting, then export it from
+              rekordbox as usual — it copies the converted files.
+            </p>
+          </div>
+
           <fieldset disabled={phase === 'running'}>
             <legend className="block text-xs font-medium text-te-grey-600 mb-2 uppercase">Convert to</legend>
             <div className="flex flex-col gap-2">
@@ -179,7 +209,7 @@ export const ConvertFlacPanel: React.FC = () => {
               ) : (
                 <>
                   <div>
-                    {preview.files} FLAC file{preview.files === 1 ? '' : 's'} to convert
+                    {preview.files} FLAC file{preview.files === 1 ? '' : 's'} to convert{scope ? ` in ${scope.label}` : ''}
                     {' '}— {formatFileSize(preview.totalSizeBytes)}, {preview.flacTracks} entr{preview.flacTracks === 1 ? 'y' : 'ies'}
                   </div>
                   {preview.conflicts > 0 && (

@@ -169,7 +169,10 @@ export interface ConvertFlacPreview {
 
 export interface ConvertFlacRequest {
   operationId: string;
+  /** The whole library, always: an original is trashed only if nothing else uses it. */
   tracks: TrackPayload[];
+  /** Convert only these entries — a playlist on its way to a USB stick. Absent means all. */
+  scopeTrackIds?: string[];
   libraryPath: string;
   /** Required when `libraryPath` is a master.db. */
   dbKey?: string;

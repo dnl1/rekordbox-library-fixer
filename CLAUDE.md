@@ -94,7 +94,11 @@ collection has to go through the database.
   24-bit WAV as WAVE_FORMAT_EXTENSIBLE, which older CDJs refuse, so the header is patched in place to
   plain PCM plus a `JUNK` chunk of the same size. `music-metadata` is required rather than imported in
   the converter: the renderer's tsconfig also checks `src/main` and resolves the package to its browser
-  build, which has no `parseFile`. The run lives in `src/renderer/conversion/convertFlacSession.ts`, not
+  build, which has no `parseFile`. A run can be limited to a playlist or folder (`scopeTrackIds`,
+  listed by `src/renderer/utils/playlistScopes.ts`) — the step before exporting that playlist to USB from
+  rekordbox, which copies the converted files; the app does not write USB exports itself. The whole
+  library is still sent, because an original may be trashed only if no entry outside the scope uses it
+  (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertFlacSession.ts`, not
   the panel: the library reload after a write replaces the whole page with a spinner, which unmounted the
   panel at the moment its result arrived.
 - **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),

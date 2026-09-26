@@ -122,4 +122,23 @@ describe('ConvertFlacPanel', () => {
     render(<ConvertFlacPanel />);
     expect(screen.queryByText('Complete')).toBeNull();
   });
+
+  it('converts only the chosen playlist, while sending the whole library', async () => {
+    // The whole library travels too: an original is trashed only if nothing else uses it.
+    context.libraryData = { ...library(['/m/a.flac', '/m/b.flac']), playlists: [{ name: 'USB', type: 'PLAYLIST', tracks: ['1'] }] };
+    render(<ConvertFlacPanel />);
+    fireEvent.change(screen.getByLabelText('Convert'), { target: { value: 'USB' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await waitFor(() => expect(api().convertFlacPreview).toHaveBeenCalled());
+    const sent = api().convertFlacPreview.mock.calls.at(-1)[0];
+    expect(sent.scopeTrackIds).toEqual(['1']);
+    expect(sent.tracks).toHaveLength(2);
+  });
+
+  it('offers the whole library by default', () => {
+    context.libraryData = { ...library(['/m/a.flac']), playlists: [{ name: 'USB', type: 'PLAYLIST', tracks: ['0'] }] };
+    render(<ConvertFlacPanel />);
+    expect((screen.getByLabelText('Convert') as HTMLSelectElement).value).toBe('');
+    expect(screen.getByRole('option', { name: 'Playlist: USB (1)' })).toBeTruthy();
+  });
 });
