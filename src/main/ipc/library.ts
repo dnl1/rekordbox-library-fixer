@@ -28,6 +28,7 @@ export function registerLibraryIpc(): void {
       properties: ['openFile'],
       filters: [
         { name: 'Rekordbox XML', extensions: ['xml'] },
+        { name: 'Rekordbox database (master.db)', extensions: ['db'] },
         { name: 'All Files', extensions: ['*'] }
       ],
       defaultPath: path.join(

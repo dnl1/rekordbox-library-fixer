@@ -8,9 +8,16 @@ describe('databaseCandidates', () => {
     expect(paths).toHaveLength(3);
   });
 
-  it('uses the Pioneer directory under APPDATA on Windows', () => {
-    const paths = databaseCandidates('C:\\Users\\dj\\AppData\\Roaming', 'win32');
-    expect(paths[0].replace(/\\/g, '/')).toContain('Pioneer/rekordbox/master.db');
+  it('uses the Pioneer directory under APPDATA on Windows, not the home folder', () => {
+    // Callers pass the home folder; the database was looked for in <home>\Pioneer
+    // and so never listed on Windows.
+    const paths = databaseCandidates('C:\\Users\\dj', 'win32', 'C:\\Users\\dj\\AppData\\Roaming');
+    expect(paths[0]).toBe('C:\\Users\\dj\\AppData\\Roaming\\Pioneer\\rekordbox\\master.db');
+  });
+
+  it('falls back to AppData\\Roaming under the home folder when APPDATA is unset', () => {
+    const paths = databaseCandidates('C:\\Users\\dj', 'win32', undefined);
+    expect(paths[0]).toBe('C:\\Users\\dj\\AppData\\Roaming\\Pioneer\\rekordbox\\master.db');
   });
 });
 

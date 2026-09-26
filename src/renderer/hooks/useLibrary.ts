@@ -32,17 +32,6 @@ export const useLibrary = (showNotification: ShowNotification) => {
     }
   }, [showNotification]);
 
-  const selectLibrary = useCallback(async () => {
-    try {
-      const path = await window.electronAPI.selectRekordboxXML();
-      if (path) {
-        await loadLibrary(path);
-      }
-    } catch {
-      showNotification('error', 'Failed to select library file');
-    }
-  }, [loadLibrary, showNotification]);
-
   const clearStoredData = useCallback(() => {
     localStorage.removeItem('rekordboxLibraryPath');
     setLibraryPath('');
@@ -111,6 +100,19 @@ export const useLibrary = (showNotification: ShowNotification) => {
       (path.toLowerCase().endsWith('.db') ? loadFromDb(path) : loadLibrary(path)),
     [loadFromDb, loadLibrary]
   );
+
+  // The picker offers "All Files" too, and a master.db chosen there went to the
+  // XML parser. It is the only way in when the database is not in the usual place.
+  const selectLibrary = useCallback(async () => {
+    try {
+      const path = await window.electronAPI.selectRekordboxXML();
+      if (path) {
+        await openLibrary(path);
+      }
+    } catch {
+      showNotification('error', 'Failed to select library file');
+    }
+  }, [openLibrary, showNotification]);
 
   // Startup: auto-load last library if the file is still reachable.
   // eslint-disable-next-line react-hooks/exhaustive-deps

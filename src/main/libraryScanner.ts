@@ -11,12 +11,24 @@ export interface FoundLibrary {
   modified: Date;
 }
 
-/** Where rekordbox keeps its database, newest layout first. */
-export function databaseCandidates(home: string, platform: NodeJS.Platform): string[] {
+/**
+ * Where rekordbox keeps its database, newest layout first.
+ *
+ * `home` is the user's home folder on every platform. On Windows rekordbox
+ * lives under %APPDATA%, not the home folder: callers passed the home folder
+ * while this looked for `<home>\Pioneer`, so on Windows the database was never
+ * listed on the home screen and its backups never showed in the Backups tab.
+ */
+export function databaseCandidates(
+  home: string,
+  platform: NodeJS.Platform,
+  appData: string | undefined = process.env.APPDATA
+): string[] {
+  const join = platform === 'win32' ? path.win32.join : path.posix.join;
   const base = platform === 'win32'
-    ? path.join(home, 'Pioneer')
-    : path.join(home, 'Library', 'Pioneer');
-  return ['rekordbox', 'rekordbox7', 'rekordbox6'].map((d) => path.join(base, d, 'master.db'));
+    ? join(appData || join(home, 'AppData', 'Roaming'), 'Pioneer')
+    : join(home, 'Library', 'Pioneer');
+  return ['rekordbox', 'rekordbox7', 'rekordbox6'].map((d) => join(base, d, 'master.db'));
 }
 
 /** Directories people actually save an XML export into. */
