@@ -64,7 +64,7 @@ const AppWithRouter: React.FC = () => {
     isLoading,
     startupComplete,
     selectLibrary,
-    loadLibrary,
+    openLibrary,
     loadFromDb,
     clearStoredData,
     setLibraryData
@@ -161,7 +161,7 @@ const AppWithRouter: React.FC = () => {
             libraryPath,
             showNotification,
             setLibraryData,
-            onLoadLibrary: loadLibrary,
+            onLoadLibrary: openLibrary,
             onSelectLibrary: selectLibrary,
             onLoadFromDb: loadFromDb,
             onUnloadLibrary: clearStoredData
@@ -204,7 +204,7 @@ const AppWithRouter: React.FC = () => {
       <TutorialModal isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
 
       {/* Native Drop Handler */}
-      <NativeDropHandler onFileDrop={loadLibrary} acceptedExtensions={['.xml']} />
+      <NativeDropHandler onFileDrop={openLibrary} acceptedExtensions={['.xml']} />
     </div>
   );
 };
