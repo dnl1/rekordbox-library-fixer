@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, FileText, Database, Clock, Copy, Check } from 'lucide-react';
+import { FolderOpen, FileText, Database, Clock, Copy, Check, KeyRound } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   keyCommandFor, platformFromUserAgent, looksLikeDbKey,
@@ -37,6 +37,27 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
   const setRekordboxDbKey = useSettingsStore((state) => state.setRekordboxDbKey);
   const [pendingDb, setPendingDb] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  // The same pyrekordbox command, run by the app: nobody has to copy it into a
+  // terminal and paste the result back. It installs pyrekordbox for the user
+  // the first time, which is why it waits for a click.
+  const recoverKey = async () => {
+    setRecovering(true);
+    setRecoveryError(null);
+    try {
+      const res = await window.electronAPI.recoverDbKey();
+      if (res.success && res.data) {
+        setRekordboxDbKey(res.data.key);
+        if (pendingDb) { onLoadFromDb?.(pendingDb); setPendingDb(null); }
+      } else {
+        setRecoveryError(res.error ?? 'The key could not be read.');
+      }
+    } finally {
+      setRecovering(false);
+    }
+  };
   const keyCommand = keyCommandFor(platformFromUserAgent(navigator.userAgent));
   const [found, setFound] = useState<FoundLibrary[]>([]);
 
@@ -147,6 +168,23 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
 
           {pendingDb && (
             <div className="mt-te-md rounded-te border border-te-orange bg-te-grey-100 p-3">
+              <button
+                type="button"
+                onClick={() => { void recoverKey(); }}
+                disabled={recovering}
+                className="btn-primary text-xs mb-1 disabled:opacity-60"
+              >
+                <KeyRound size={12} className="inline mr-1.5" />
+                {recovering ? 'Getting the key… (installing pyrekordbox the first time)' : 'Get the key automatically'}
+              </button>
+              <p className="text-[10px] font-te-mono text-te-grey-500 normal-case leading-relaxed mb-3">
+                Runs the command below with Python on this machine, installing pyrekordbox for your user
+                if it is not there, and opens the database with the key it prints.
+              </p>
+              {recoveryError && (
+                <p className="text-[11px] font-te-mono text-red-500 normal-case mb-3">{recoveryError}</p>
+              )}
+
               <p className="text-[11px] font-te-mono text-te-grey-700 normal-case leading-relaxed mb-2">
                 Rekordbox encrypts its database. Opening it needs the SQLCipher key, which is the
                 same on every rekordbox 6/7 install. This app does not ship it — run this in{' '}

@@ -80,7 +80,10 @@ collection has to go through the database.
 - **The database key** (`src/renderer/utils/keyExtractionCommand.ts`): never hardcoded, never
   shipped. The load screen shows the one-line command for the host platform that prints the key
   locally via the open-source pyrekordbox package, and a pasted key is checked for shape (64 hex
-  characters) before it is used.
+  characters) before it is used. **Get the key automatically** (`src/main/dbKeyRecovery.ts`) runs that
+  same one-liner with the local Python — `py` first on Windows, since a bare `python` there is often the
+  Store alias — installing pyrekordbox with `pip --user` if it is missing. Fixed commands only; a test
+  keeps its one-liner identical to the one shown on screen.
 - **FLAC conversion** (`src/main/flacConverter.ts`, `rekordboxDbConverter.ts`, `conversionSettlement.ts`,
   `ipc/conversion.ts`, `components/maintenance/ConvertFlacPanel.tsx`): FLAC → AIFF, WAV or MP3 320 kbps CBR
   beside the original, for players that cannot read FLAC. Runs a bundled ffmpeg (`ffmpegBinary.ts`): the

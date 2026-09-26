@@ -7,6 +7,8 @@ import { isRekordboxRunning } from '../rekordboxRunning';
 import { handleParseRekordboxDb } from '../rekordboxDbIpc';
 import { parseDb } from '../rekordboxDbParser';
 import { assertWritableLibraryPath } from '../librarySource';
+import { recoverDbKey } from '../dbKeyRecovery';
+import type { IpcResult, RecoveredDbKey } from '../ipcContract';
 
 /**
  * Opening a library: the file dialogs, the XML parser, rekordbox's
@@ -88,6 +90,13 @@ export function registerLibraryIpc(): void {
   ipcMain.handle('detect-rekordbox-db', async () => detectRekordboxDb());
 
   ipcMain.handle('scan-for-libraries', async () => scanForLibraries());
+
+  ipcMain.handle('recover-db-key', async (): Promise<IpcResult<RecoveredDbKey>> => {
+    const outcome = await recoverDbKey(process.platform);
+    return outcome.ok
+      ? { success: true, data: { key: outcome.key, installed: outcome.installed } }
+      : { success: false, error: outcome.detail };
+  });
 
   ipcMain.handle('is-rekordbox-running', async () => ({ running: isRekordboxRunning() }));
 

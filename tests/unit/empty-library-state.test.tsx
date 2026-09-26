@@ -82,6 +82,28 @@ describe('EmptyLibraryState', () => {
     expect(screen.getByPlaceholderText(/Paste the master.db key/)).toBeTruthy();
   });
 
+  it('gets the key itself and opens the database with it', async () => {
+    useSettingsStore.setState({ rekordboxDbKey: '' } as any);
+    const key = 'ab'.repeat(32);
+    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: true, data: { key, installed: true } }));
+    show([DB]);
+    fireEvent.click(await screen.findByTitle(DB.path));
+    fireEvent.click(screen.getByRole('button', { name: /Get the key automatically/ }));
+    await waitFor(() => expect(onLoadFromDb).toHaveBeenCalledWith(DB.path));
+    expect(useSettingsStore.getState().rekordboxDbKey).toBe(key);
+  });
+
+  it('says why when the key cannot be got, and keeps the paste field', async () => {
+    useSettingsStore.setState({ rekordboxDbKey: '' } as any);
+    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: false, error: 'Python 3 was not found.' }));
+    show([DB]);
+    fireEvent.click(await screen.findByTitle(DB.path));
+    fireEvent.click(screen.getByRole('button', { name: /Get the key automatically/ }));
+    expect(await screen.findByText('Python 3 was not found.')).toBeTruthy();
+    expect(onLoadFromDb).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/Paste the master.db key/)).toBeTruthy();
+  });
+
   it('shows a command that prints the key, for this platform', async () => {
     // Pointing at documentation sent people hunting for a value their own
     // machine can produce in one line.

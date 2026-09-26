@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectRekordboxDb: () => ipcRenderer.invoke('detect-rekordbox-db'),
   scanForLibraries: () => ipcRenderer.invoke('scan-for-libraries'),
   isRekordboxRunning: () => ipcRenderer.invoke('is-rekordbox-running'),
+  recoverDbKey: () => ipcRenderer.invoke('recover-db-key'),
   showSystemNotification: (data: { type: string; message: string }) =>
     ipcRenderer.invoke('show-system-notification', data),
   mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: MergePlanPayload[] }) =>

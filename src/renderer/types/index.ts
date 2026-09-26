@@ -1,6 +1,6 @@
 // Global types and interfaces
 import type {
-  IpcResult, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
+  IpcResult, RecoveredDbKey, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
 } from '../../main/ipcContract';
 
 export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
@@ -196,6 +196,8 @@ declare global {
       detectRekordboxDb: () => Promise<{ found: boolean; dbPath: string | null; variant: string | null }>;
       scanForLibraries: () => Promise<Array<{ kind: 'database' | 'xml'; path: string; label: string; size: number; modified: string }>>;
       isRekordboxRunning: () => Promise<{ running: boolean }>;
+      /** Runs pyrekordbox on this machine (installing it if needed) and returns the key it prints. */
+      recoverDbKey: () => Promise<IpcResult<RecoveredDbKey>>;
       showSystemNotification?: (data: { type: string; message: string }) => Promise<{ success: boolean }>;
       mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: Array<{ keepId: string; removeIds: string[] }> }) => Promise<{ success: boolean; entriesRemoved?: number; playlistLinksMoved?: number; backupPath?: string; error?: string }>;
       findBrokenEntries: (args: { tracks: any[]; includeMissing?: boolean }) => Promise<{ success: boolean; data?: Array<{ trackId: string; name: string; artist: string; location: string; reason: string }>; error?: string }>;
