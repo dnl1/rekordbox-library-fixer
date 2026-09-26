@@ -127,6 +127,23 @@ Tracks whose file is merely **gone** are behind an opt-in tick box. The relocato
 
 Streaming tracks are never listed, whatever you tick. Every id is re-checked against the library before it goes, so an entry whose file turns out to be there — a drive that was unmounted during the scan and is back now — is left alone and reported.
 
+### Convert FLAC for older players
+Older CDJs and XDJs cannot play FLAC, and a FLAC collection finds that out at the club. **Maintenance → Convert FLAC** converts every FLAC in the library to a file beside it, under the same name, and points each entry at the new file. Cues, loops, beatgrids and playlists stay with the track — only what the file is changes.
+
+| Target | What you get |
+|--------|--------------|
+| **AIFF** (recommended) | Lossless and sample-exact, same bit depth and sample rate. Tags and artwork are kept (ID3v2.3), which rekordbox reads. |
+| **WAV** | Lossless and sample-exact. The header is written as plain PCM, which older CDJs require. Tags and artwork mostly do not survive — WAV has nowhere rekordbox reads them from. |
+| **MP3 320 kbps** | A quarter of the size, constant bit rate (older CDJs misjudge the length of a variable-rate file). Lossy, and not sample-exact: the encoder adds a few milliseconds at the start, so on a player that ignores the gapless header cues land slightly late. High-resolution FLAC is resampled to 44.1 or 48 kHz. |
+
+Every converted file is written under a temporary name and checked before it takes the real one — same sample rate, channels and bit depth, and for AIFF and WAV the exact same number of samples. A file already sitting at the destination is never overwritten. The originals stay unless you tick **Move the FLAC originals to the trash**, and even then an original goes only once every entry that used it points at its conversion. On `master.db` rekordbox must be closed and a backup is taken first; if the database write fails, the new files are removed again and the FLACs were never touched.
+
+An XML library can be converted too, but rekordbox matches an imported track by its location, so importing the XML adds the converted files as new tracks next to the FLACs. Open the database instead to convert in place.
+
+Running the app under WSL against a Windows library works too: rekordbox's `C:/…` paths are reached through `/mnt/c/…` for the conversion, and written back as `C:/…`.
+
+The conversion uses a bundled [ffmpeg](https://ffmpeg.org/): the [ffmpeg-static b6.1.1](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1) builds, licensed under the GPL, whose text ships next to the binary. ffmpeg runs as a separate program and is not part of this app's code. Its source is at [ffmpeg.org/download](https://ffmpeg.org/download.html#get-sources); each build's README in that release names the exact upstream build it came from. There is no build for 32-bit Windows; the tool says so there.
+
 ### Backups
 A backup manager reachable at any time, with or without a library loaded. Lists every backup the app has taken, restores one (writing a safety copy of the current state first), and asks whether you want to load the restored library straight away.
 
@@ -209,8 +226,9 @@ Alternatively, right-click the app and choose **Open**, then click **Open** in t
 ```bash
 git clone https://github.com/koraysels/rekordbox-library-fixer.git
 cd rekordbox-library-fixer
-npm install
-npm run dev
+pnpm install
+pnpm fetch:ffmpeg   # the ffmpeg the FLAC conversion runs; pnpm dev fetches it too
+pnpm dev
 ```
 
 ---
