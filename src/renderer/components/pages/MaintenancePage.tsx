@@ -5,12 +5,14 @@ import { useAppContext } from '../../AppWithRouter';
 import { BrokenEntriesPanel } from '../BrokenEntriesPanel';
 import { ConsolidatePanel } from '../maintenance/ConsolidatePanel';
 import { FilterMovePanel } from '../maintenance/FilterMovePanel';
+import { ConvertFlacPanel } from '../maintenance/ConvertFlacPanel';
 
 /**
- * Three independent tools, each owning its own state: clearing out entries that
- * can never resolve to a file, gathering the library onto one drive, and moving
- * a filtered part of it. They lived in one file and shared nothing but a scroll
- * bar, with the second tool's state distinguished only by an "f" prefix.
+ * Independent tools, each owning its own state: clearing out entries that can
+ * never resolve to a file, converting FLAC for players that cannot read it,
+ * gathering the library onto one drive, and moving a filtered part of it. They
+ * lived in one file and shared nothing but a scroll bar, with the second tool's
+ * state distinguished only by an "f" prefix.
  */
 export const MaintenancePage: React.FC = () => {
   const { libraryData, libraryPath } = useAppContext();
@@ -25,6 +27,7 @@ export const MaintenancePage: React.FC = () => {
         <BrokenEntriesPanel />
       </div>
 
+      <ConvertFlacPanel />
       <ConsolidatePanel tracks={tracks} libraryPath={libraryPath} hasLibrary={hasLibrary} />
       <FilterMovePanel tracks={tracks} libraryPath={libraryPath} hasLibrary={hasLibrary} />
 

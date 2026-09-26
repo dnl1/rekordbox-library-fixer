@@ -1,4 +1,7 @@
 // Global types and interfaces
+import type {
+  IpcResult, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
+} from '../../main/ipcContract';
 
 export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
 
@@ -241,6 +244,11 @@ declare global {
       consolidateLibrary: (data: { operationId: string; tracks: any[]; libraryPath: string; options: any }) => Promise<any>;
       cancelConsolidate?: (operationId: string) => Promise<any>;
       onConsolidateProgress?: (callback: (progress: any) => void) => () => void;
+      // FLAC → AIFF / WAV
+      convertFlacPreview: (data: { tracks: any[]; format: ConversionFormatPayload }) => Promise<IpcResult<ConvertFlacPreview>>;
+      convertFlac: (data: ConvertFlacRequest) => Promise<IpcResult<ConvertFlacSummary>>;
+      cancelConvertFlac: (operationId: string) => Promise<{ success: boolean }>;
+      onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => () => void;
       // File Drop APIs
       handleNativeDrop: (filePaths: string[]) => Promise<{ success: boolean; data?: { filePaths: string[]; filePath?: string }; error?: string }>;
       onNativeFileDrop: (callback: (filePaths: string[]) => void) => () => void;

@@ -152,5 +152,52 @@ export interface FilterRulePayload {
   value: string;
 }
 
+export type ConversionFormatPayload = 'aiff' | 'wav' | 'mp3';
+
+/** What a FLAC conversion would do, before it runs. */
+export interface ConvertFlacPreview {
+  /** False when this build carries no ffmpeg for the platform it runs on. */
+  available: boolean;
+  flacTracks: number;
+  /** Distinct files: entries sharing one FLAC share its conversion. */
+  files: number;
+  missing: number;
+  /** A file of the target format and the same name already there, which is left alone. */
+  conflicts: number;
+  totalSizeBytes: number;
+}
+
+export interface ConvertFlacRequest {
+  operationId: string;
+  tracks: TrackPayload[];
+  libraryPath: string;
+  /** Required when `libraryPath` is a master.db. */
+  dbKey?: string;
+  format: ConversionFormatPayload;
+  /** Move each original to the trash once every entry points at its conversion. */
+  trashOriginals: boolean;
+}
+
+export interface ConvertFlacProgress {
+  operationId: string;
+  current: number;
+  total: number;
+  currentFile: string;
+  converted: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface ConvertFlacSummary {
+  filesConverted: number;
+  tracksUpdated: number;
+  skipped: Array<{ trackId: string; location?: string; reason: string }>;
+  failed: Array<{ file: string; error: string }>;
+  cancelled: boolean;
+  trashed: string[];
+  trashFailed: Array<{ file: string; error: string }>;
+  backupPath?: string;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;
