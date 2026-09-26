@@ -57,7 +57,8 @@ export const ConvertFlacPanel: React.FC = () => {
     setLocalPhase('idle'); setPreview(null); setLocalError(null);
   }, []);
 
-  const runPreview = useCallback(async () => {
+  /** Returns the preview so Convert can run one itself when none was asked for. */
+  const runPreview = useCallback(async (): Promise<ConvertFlacPreview | null> => {
     resetConversionSession();
     setLocalPhase('previewing');
     setLocalError(null);
@@ -65,11 +66,19 @@ export const ConvertFlacPanel: React.FC = () => {
     if (res.success && res.data) {
       setPreview(res.data);
       setLocalPhase('previewed');
-    } else {
-      setLocalError(res.error ?? 'Preview failed');
-      setLocalPhase('idle');
+      return res.data;
     }
+    setLocalError(res.error ?? 'Preview failed');
+    setLocalPhase('idle');
+    return null;
   }, [tracks, format, scopeTrackIds]);
+
+  // Convert used to stay greyed out until Preview had been pressed, which
+  // nothing on screen said. It previews by itself now, then asks to confirm.
+  const askToConvert = useCallback(async () => {
+    const current = localPhase === 'previewed' ? preview : await runPreview();
+    if (current?.available && current.files > 0) { setLocalPhase('confirming'); }
+  }, [localPhase, preview, runPreview]);
 
   const runConvert = useCallback(async () => {
     if (isDatabase) {
@@ -212,6 +221,15 @@ export const ConvertFlacPanel: React.FC = () => {
                     {preview.files} FLAC file{preview.files === 1 ? '' : 's'} to convert{scope ? ` in ${scope.label}` : ''}
                     {' '}— {formatFileSize(preview.totalSizeBytes)}, {preview.flacTracks} entr{preview.flacTracks === 1 ? 'y' : 'ies'}
                   </div>
+                  {preview.reusable > 0 && (
+                    <div className="text-te-grey-600">
+                      {preview.reusable} already have a .{format} from an earlier run — each is checked
+                      against its FLAC and used as it is if identical, left alone if not
+                    </div>
+                  )}
+                  {nothingToDo && (
+                    <div className="text-te-grey-600">Nothing to convert here.</div>
+                  )}
                   {preview.conflicts > 0 && (
                     <div className="text-amber-600">
                       {preview.conflicts} already have a .{format} beside them — those are left alone
@@ -296,15 +314,15 @@ export const ConvertFlacPanel: React.FC = () => {
             ) : (
               <>
                 <button
-                  onClick={runPreview}
+                  onClick={() => { void runPreview(); }}
                   disabled={phase === 'previewing'}
                   className="btn-secondary flex items-center gap-2 disabled:opacity-40"
                 >
                   {phase === 'previewing' ? 'Checking…' : 'Preview'}
                 </button>
                 <button
-                  onClick={() => setLocalPhase('confirming')}
-                  disabled={phase !== 'previewed' || !preview?.available || nothingToDo}
+                  onClick={askToConvert}
+                  disabled={phase === 'previewing' || (phase === 'previewed' && (!preview?.available || nothingToDo))}
                   className="btn-primary flex items-center gap-2 disabled:opacity-40"
                 >
                   <Play className="w-4 h-4" /> Convert

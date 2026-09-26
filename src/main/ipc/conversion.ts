@@ -87,6 +87,7 @@ export function registerConversionIpc(): void {
           available: ffmpegPath() !== null,
           flacTracks: flac.length,
           files: plan.jobs.length,
+          reusable: plan.jobs.filter((job) => job.existing).length,
           missing: plan.skipped.filter((s) => s.kind === 'missing').length,
           conflicts: plan.skipped.filter((s) => s.kind === 'exists').length,
           totalSizeBytes: plan.jobs.reduce((sum, job) => sum + (job.size ?? 0), 0),
@@ -162,11 +163,11 @@ export function registerConversionIpc(): void {
             }
           }
         } catch (error) {
-          removeQuietly(result.converted.map((c) => c.newLocation));
+          removeQuietly(result.converted.filter((c) => !c.adopted).map((c) => c.newLocation));
           const message = error instanceof Error ? error.message : 'The library could not be written';
           return {
             success: false,
-            error: `${message} The converted files were removed again; the FLAC originals were not touched.`,
+            error: `${message} The files converted by this run were removed again; the FLAC originals were not touched.`,
           };
         }
       }

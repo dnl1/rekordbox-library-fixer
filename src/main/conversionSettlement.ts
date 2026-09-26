@@ -62,7 +62,8 @@ export function settleConversions(
   for (const file of converted) {
     const updated = file.trackIds.filter((id) => updatedTrackIds.has(id));
     if (updated.length === 0) {
-      settlement.orphaned.push(file.newLocation);
+      // A file this run adopted rather than wrote is not its to remove.
+      if (!file.adopted) { settlement.orphaned.push(file.newLocation); }
       continue;
     }
     settlement.kept.push(file);

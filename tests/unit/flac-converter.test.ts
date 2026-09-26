@@ -54,9 +54,15 @@ describe('planConversions', () => {
     expect(plan.skipped[0]).toMatchObject({ trackId: '1', kind: 'missing' });
   });
 
-  it('never overwrites a file already at the destination', () => {
-    // It may be a hand-made conversion or a different recording with the same name.
+  it('checks a lossless file already at the destination rather than skipping it', () => {
+    // A run that stopped before writing the library leaves complete
+    // conversions behind; treating them as strangers left nothing to convert.
     const plan = planConversions([{ id: '1', location: '/m/a.flac' }], 'wav', all);
+    expect(plan.jobs[0]).toMatchObject({ destination: '/m/a.wav', existing: true });
+  });
+
+  it('leaves an existing MP3 alone — it cannot be proved identical', () => {
+    const plan = planConversions([{ id: '1', location: '/m/a.flac' }], 'mp3', all);
     expect(plan.jobs).toEqual([]);
     expect(plan.skipped[0]).toMatchObject({ trackId: '1', kind: 'exists' });
   });
@@ -236,11 +242,26 @@ describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
     expect(out.sampleRate).toBe(48000);
   });
 
-  it('skips a destination that appeared after the plan was made', async () => {
-    const plan = planConversions([{ id: 't1', location: flac }], 'aiff', (p) => p === flac);
+  it('reuses an identical conversion an earlier run left behind, without touching it', async () => {
+    const aiff = path.join(dir, 'Tést Track.aiff');
+    const before = fs.statSync(aiff).mtimeMs;
+    const result = await convert('aiff');
+    expect(result.converted[0]).toMatchObject({ newLocation: aiff, adopted: true, bitDepth: 24 });
+    expect(fs.statSync(aiff).mtimeMs).toBe(before);
+  });
+
+  it('leaves alone a different recording that happens to have the name', async () => {
+    const other = path.join(dir, 'Other.flac');
+    execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
+      '-i', 'sine=frequency=880:duration=2:sample_rate=96000', '-ac', '2', '-c:a', 'flac',
+      '-sample_fmt', 's32', '-bits_per_raw_sample', '24', other]);
+    // Same length, rate and depth as the real conversion — only the audio differs.
+    execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-i', other, '-c:a', 'pcm_s24be', path.join(dir, 'Impostor.aiff')]);
+    fs.copyFileSync(flac, path.join(dir, 'Impostor.flac'));
+    const plan = planConversions([{ id: 'x', location: path.join(dir, 'Impostor.flac') }], 'aiff');
     const result = await new FlacConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: false });
     expect(result.converted).toEqual([]);
-    expect(result.skipped[0]).toMatchObject({ kind: 'exists' });
+    expect(result.skipped[0].reason).toMatch(/not this recording \(the audio differs\)/);
   });
 
   it('stops without leaving a partial file when cancelled', async () => {

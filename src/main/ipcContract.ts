@@ -159,8 +159,14 @@ export interface ConvertFlacPreview {
   /** False when this build carries no ffmpeg for the platform it runs on. */
   available: boolean;
   flacTracks: number;
-  /** Distinct files: entries sharing one FLAC share its conversion. */
+  /** Distinct files: entries sharing one FLAC share its conversion. Includes `reusable`. */
   files: number;
+  /**
+   * Of those, the ones whose AIFF or WAV is already there — usually a run that
+   * stopped before it wrote the library. Each is used if it decodes to exactly
+   * the FLAC's audio, and left alone if not.
+   */
+  reusable: number;
   missing: number;
   /** A file of the target format and the same name already there, which is left alone. */
   conflicts: number;

@@ -87,7 +87,9 @@ collection has to go through the database.
   binaries are fetched per platform and arch into `vendor/ffmpeg/` by `scripts/fetch-ffmpeg.mjs`, checked
   against pinned SHA-256s, and shipped as `extraResources` under `resources/ffmpeg/`. Never an ffmpeg from
   the PATH. The order is the safety: convert under a `.part` name, verify (exact sample count for AIFF/WAV,
-  a length tolerance for MP3), rename, write the library once, and only then trash an original — if asked,
+  a length tolerance for MP3), rename, write the library once — an AIFF/WAV already at the destination is
+  adopted only if its decoded PCM hashes the same as the FLAC's (`adopted`, never removed by cleanup), so an
+  interrupted run resumes — and only then trash an original — if asked,
   and only when every entry that used it moved. A failed library write removes the new files. In
   `master.db` the write also sets `FileType` (MP3 1, WAV 11, AIFF 12), `FileSize`, `BitRate`, `BitDepth`
   and `SampleRate`, and re-checks each entry still points at the FLAC it was planned from. ffmpeg writes

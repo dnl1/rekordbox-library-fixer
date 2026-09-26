@@ -45,6 +45,11 @@ export interface ConversionJob {
   destination: string;
   trackIds: string[];
   size?: number;
+  /**
+   * The destination is already there. It is used only if it proves to be an
+   * exact conversion of the source; otherwise it is left alone.
+   */
+  existing?: boolean;
 }
 
 export interface ConversionSkip {
@@ -69,6 +74,12 @@ export interface ConvertedFile {
   bitDepth: number;
   /** kbps, as rekordbox stores it. */
   bitRate: number;
+  /**
+   * The file was already there — an earlier run that stopped before writing
+   * the library — and proved identical, so it was used rather than redone.
+   * This run did not create it, so nothing here ever removes it.
+   */
+  adopted?: boolean;
 }
 
 export interface ConversionFailure {
@@ -123,9 +134,13 @@ export function convertedPath(location: string, format: ConversionFormat): strin
  * macOS keeps both spellings of an accent in the same library, and comparing
  * them raw would convert one file twice.
  *
- * A destination that already exists is never overwritten. It may be a
- * conversion made by hand, or a different recording with the same name —
- * there is no telling which, so it is reported and left alone.
+ * A destination that already exists is never overwritten. For AIFF and WAV it
+ * becomes a job to check: a run that stopped before writing the library — the
+ * app closed, the machine slept — leaves complete conversions behind, and
+ * treating them as strangers made every later run find nothing to do. If the
+ * file decodes to exactly the source's audio it is used as it is; if not — a
+ * hand-made copy, a different recording with the same name — it is left
+ * alone. An MP3 cannot be proved identical, so an existing one is left alone.
  */
 export function planConversions(
   tracks: ConvertibleTrack[],
@@ -148,6 +163,10 @@ export function planConversions(
       continue;
     }
     const destination = convertedPath(location, format);
+    if (exists(destination) && isLosslessFormat(format)) {
+      jobs.set(key, { source: location, destination, trackIds: [track.id], size: track.size, existing: true });
+      continue;
+    }
     if (exists(destination)) {
       skipped.push({
         trackId: track.id, location, kind: 'exists',
@@ -396,7 +415,34 @@ export class FlacConverter {
 
       const temp = `${job.destination}.part`;
       try {
+        const source = await probeAudio(job.source);
+        const shape = outputShape(format, source);
+
         // Checked again here: the plan may be minutes old by the time its turn comes.
+        if (fs.existsSync(job.destination) && isLosslessFormat(format)) {
+          const problem = await this.provesIdentical(job.source, job.destination, source, shape, format, cancelToken);
+          if (problem) {
+            for (const trackId of job.trackIds) {
+              result.skipped.push({
+                trackId, location: job.source, kind: 'exists',
+                reason: `${path.basename(job.destination)} is already there and is not this recording (${problem}) — it is left alone`,
+              });
+            }
+          } else {
+            result.converted.push({
+              trackIds: job.trackIds,
+              oldLocation: job.source,
+              newLocation: job.destination,
+              format,
+              size: fs.statSync(job.destination).size,
+              sampleRate: shape.sampleRate,
+              bitDepth: shape.bits,
+              bitRate: shape.bitRate,
+              adopted: true,
+            });
+          }
+          continue;
+        }
         if (fs.existsSync(job.destination)) {
           for (const trackId of job.trackIds) {
             result.skipped.push({
@@ -407,8 +453,6 @@ export class FlacConverter {
           continue;
         }
 
-        const source = await probeAudio(job.source);
-        const shape = outputShape(format, source);
         fs.rmSync(temp, { force: true });
         await this.run(ffmpegArgs(job.source, temp, format, shape, source.sampleRate), cancelToken);
         if (format === 'wav') { patchWavFile(temp); }
@@ -438,24 +482,59 @@ export class FlacConverter {
     return result;
   }
 
+  /**
+   * Why an existing file is not an exact conversion of the source, or null
+   * when it is. The header must agree and the decoded audio must hash the
+   * same, sample for sample — anything less and it might be another recording.
+   */
+  private async provesIdentical(
+    sourcePath: string,
+    existingPath: string,
+    source: AudioShape,
+    shape: OutputShape,
+    format: ConversionFormat,
+    cancelToken: CancelToken
+  ): Promise<string | null> {
+    let existing: AudioShape;
+    try { existing = await probeAudio(existingPath); } catch { return 'it cannot be read'; }
+    const mismatch = verifyConversion(source, existing, shape, format);
+    if (mismatch) { return mismatch; }
+    const [a, b] = [await this.pcmDigest(sourcePath, cancelToken), await this.pcmDigest(existingPath, cancelToken)];
+    return a === b ? null : 'the audio differs';
+  }
+
+  /** An MD5 of the decoded audio, widened to 32 bits so any source bit depth compares. */
+  private async pcmDigest(file: string, cancelToken: CancelToken): Promise<string> {
+    const out = await this.run(
+      ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:a:0', '-c:a', 'pcm_s32le', '-f', 'md5', '-'],
+      cancelToken,
+      true
+    );
+    const digest = out.match(/MD5=([0-9a-f]{32})/i)?.[1];
+    if (!digest) { throw new Error('could not read the audio to compare it'); }
+    return digest;
+  }
+
   /** Run ffmpeg to completion, killing it as soon as the run is cancelled. */
-  private run(args: string[], cancelToken: CancelToken): Promise<void> {
+  private run(args: string[], cancelToken: CancelToken, captureStdout = false): Promise<string> {
     return new Promise((resolve, reject) => {
       let child: ChildProcess;
       try {
-        child = spawn(this.ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+        child = spawn(this.ffmpegPath, args, { stdio: ['ignore', captureStdout ? 'pipe' : 'ignore', 'pipe'], windowsHide: true });
       } catch (error) {
         reject(error);
         return;
       }
       let stderr = '';
+      let stdout = '';
       child.stderr?.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-2000); });
+      child.stdout?.on('data', (chunk: Buffer) => { stdout = (stdout + chunk.toString()).slice(-2000); });
       const watch = setInterval(() => { if (cancelToken.cancelled) { child.kill(); } }, 200);
       child.on('error', (error) => { clearInterval(watch); reject(error); });
       child.on('close', (code) => {
         clearInterval(watch);
         if (cancelToken.cancelled) { reject(new Error('cancelled')); return; }
-        if (code === 0) { resolve(); return; }
+        if (code === 0) { resolve(stdout); return; }
         reject(new Error(stderr.trim().split('\n').pop() || `ffmpeg exited with code ${code}`));
       });
     });

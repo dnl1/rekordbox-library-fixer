@@ -47,6 +47,11 @@ describe('settleConversions', () => {
     expect(settleConversions([file(['a'])], updated, locationsStillUsed(all, updated)).trashable).toEqual(['/m/Song.flac']);
   });
 
+  it('never removes a file it adopted rather than wrote', () => {
+    const s = settleConversions([{ ...file(['a']), adopted: true }], new Set());
+    expect(s.orphaned).toEqual([]);
+  });
+
   it('removes a conversion nothing points at', () => {
     const s = settleConversions([file(['a'])], new Set());
     expect(s.orphaned).toEqual(['/m/Song.aiff']);

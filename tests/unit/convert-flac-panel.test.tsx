@@ -27,7 +27,7 @@ beforeEach(() => {
   api().onConvertFlacProgress = vi.fn(() => () => undefined);
   api().convertFlacPreview = vi.fn(async () => ({
     success: true,
-    data: { available: true, flacTracks: 1, files: 1, missing: 0, conflicts: 0, totalSizeBytes: 1000 },
+    data: { available: true, flacTracks: 1, files: 1, reusable: 0, missing: 0, conflicts: 0, totalSizeBytes: 1000 },
   }));
 });
 
@@ -63,15 +63,39 @@ describe('ConvertFlacPanel', () => {
     expect(screen.getByText(/adds the converted files as new/)).toBeTruthy();
   });
 
-  it('will not convert before a preview', () => {
+  it('previews by itself when Convert is pressed first', async () => {
+    // Convert used to stay greyed out until Preview was pressed, which nothing said.
     render(<ConvertFlacPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /^Convert$/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Convert 1 files/ })).toBeTruthy());
+    expect(api().convertFlacPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('says there is nothing to convert, and offers nothing to press', async () => {
+    api().convertFlacPreview = vi.fn(async () => ({
+      success: true,
+      data: { available: true, flacTracks: 2, files: 0, reusable: 0, missing: 0, conflicts: 2, totalSizeBytes: 0 },
+    }));
+    render(<ConvertFlacPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /^Convert$/ }));
+    await waitFor(() => expect(screen.getByText('Nothing to convert here.')).toBeTruthy());
     expect((screen.getByRole('button', { name: /^Convert$/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says which files an earlier run already converted', async () => {
+    api().convertFlacPreview = vi.fn(async () => ({
+      success: true,
+      data: { available: true, flacTracks: 3, files: 3, reusable: 2, missing: 0, conflicts: 0, totalSizeBytes: 0 },
+    }));
+    render(<ConvertFlacPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await waitFor(() => expect(screen.getByText(/2 already have a \.aiff from an earlier run/)).toBeTruthy());
   });
 
   it('says so when this build has no ffmpeg, and offers nothing to press', async () => {
     api().convertFlacPreview = vi.fn(async () => ({
       success: true,
-      data: { available: false, flacTracks: 1, files: 1, missing: 0, conflicts: 0, totalSizeBytes: 0 },
+      data: { available: false, flacTracks: 1, files: 1, reusable: 0, missing: 0, conflicts: 0, totalSizeBytes: 0 },
     }));
     render(<ConvertFlacPanel />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
