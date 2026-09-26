@@ -57,18 +57,32 @@ export interface Track {
   }>;
 }
 
+/** A hot cue's colour as rekordbox writes it: three 0–255 attributes. */
+export interface MarkColor {
+  red: number;
+  green: number;
+  blue: number;
+}
+
 export interface Cue {
   name?: string;
   type: string;
   start: number;
   length?: number;
+  /** The XML's `Num`: 0, 1, 2… for hot cue A, B, C; -1 for a memory cue. */
   hotcue?: number;
+  /** The XML's `Type` for a point mark: 0 cue, 1 fade-in, 2 fade-out, 3 load. */
+  markType?: number;
+  color?: MarkColor;
 }
 
 export interface Loop {
   name?: string;
   start: number;
   end: number;
+  /** Set for a hot loop, as for a hot cue; -1 or absent for a memory loop. */
+  hotcue?: number;
+  color?: MarkColor;
 }
 
 export interface BeatGrid {
@@ -98,6 +112,15 @@ function locationToPath(url: string): string {
   } catch {
     return decodeURIComponent(url).replace('file://localhost', '');
   }
+}
+
+function markColor(mark: { Red?: string; Green?: string; Blue?: string }): MarkColor | undefined {
+  if (mark.Red === undefined || mark.Green === undefined || mark.Blue === undefined) { return undefined; }
+  return { red: parseInt(mark.Red, 10), green: parseInt(mark.Green, 10), blue: parseInt(mark.Blue, 10) };
+}
+
+function colorAttributes(color?: MarkColor): Record<string, string> {
+  return color ? { Red: String(color.red), Green: String(color.green), Blue: String(color.blue) } : {};
 }
 
 function pathToLocation(filePath: string): string {
@@ -213,19 +236,31 @@ export class RekordboxParser {
         ? trackNode.POSITION_MARK
         : [trackNode.POSITION_MARK];
 
+      // rekordbox writes Type as a number — 0 cue, 1 fade-in, 2 fade-out,
+      // 3 load, 4 loop — while this used to look for the words "CUE" and
+      // "LOOP", which rekordbox never writes. Every cue and loop in a real
+      // export was dropped, and every XML this app saved went out without them.
+      // The words are still read, for files this app wrote before.
       for (const mark of marks) {
-        if (mark.Type === 'CUE') {
-          track.cues?.push({
-            name: mark.Name,
-            type: 'CUE',
-            start: parseFloat(mark.Start || '0'),
-            hotcue: mark.Num ? parseInt(mark.Num) : undefined,
-          });
-        } else if (mark.Type === 'LOOP') {
+        const type = String(mark.Type ?? '').trim().toUpperCase();
+        const num = mark.Num !== undefined && mark.Num !== '' ? parseInt(mark.Num, 10) : undefined;
+        const color = markColor(mark);
+        if (type === '4' || type === 'LOOP') {
           track.loops?.push({
             name: mark.Name,
             start: parseFloat(mark.Start || '0'),
             end: parseFloat(mark.End || '0'),
+            hotcue: num,
+            color,
+          });
+        } else if (['0', '1', '2', '3', 'CUE'].includes(type)) {
+          track.cues?.push({
+            name: mark.Name,
+            type: 'CUE',
+            start: parseFloat(mark.Start || '0'),
+            hotcue: num,
+            markType: type === 'CUE' ? 0 : parseInt(type, 10),
+            color,
           });
         }
       }
@@ -359,16 +394,19 @@ export class RekordboxParser {
     // Add position marks
     const positionMarks: any[] = [];
 
+    // Written the way rekordbox reads them: a numeric Type and a Num on every
+    // mark, -1 meaning a memory cue rather than a hot cue.
     if (track.cues) {
       for (const cue of track.cues) {
         const mark: any = {
           $: {
-            Type: 'CUE',
+            Name: cue.name ?? '',
+            Type: String(cue.markType ?? 0),
             Start: cue.start.toString(),
+            Num: String(cue.hotcue ?? -1),
+            ...colorAttributes(cue.color),
           },
         };
-        if (cue.name) {mark.$.Name = cue.name;}
-        if (cue.hotcue !== undefined) {mark.$.Num = cue.hotcue.toString();}
         positionMarks.push(mark);
       }
     }
@@ -377,12 +415,14 @@ export class RekordboxParser {
       for (const loop of track.loops) {
         const mark: any = {
           $: {
-            Type: 'LOOP',
+            Name: loop.name ?? '',
+            Type: '4',
             Start: loop.start.toString(),
             End: loop.end.toString(),
+            Num: String(loop.hotcue ?? -1),
+            ...colorAttributes(loop.color),
           },
         };
-        if (loop.name) {mark.$.Name = loop.name;}
         positionMarks.push(mark);
       }
     }
