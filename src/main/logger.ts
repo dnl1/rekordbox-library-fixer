@@ -70,43 +70,6 @@ export class Logger {
     });
   }
 
-  logDuplicateResolution(
-    strategy: string,
-    duplicateSets: any[],
-    tracksToKeep: Map<string, any>,
-    tracksRemoved: number
-  ): void {
-    const details = {
-      strategy,
-      totalDuplicateSets: duplicateSets.length,
-      totalTracksKept: tracksToKeep.size,
-      totalTracksRemoved: tracksRemoved,
-      duplicateSets: duplicateSets.map(set => ({
-        id: set.id,
-        matchType: set.matchType,
-        confidence: set.confidence,
-        tracksCount: set.tracks.length,
-        tracksInSet: set.tracks.map((track: any) => ({
-          id: track.id,
-          name: track.name,
-          artist: track.artist,
-          location: track.location,
-          size: track.size,
-          bitrate: track.bitrate
-        }))
-      })),
-      keptTracks: Array.from(tracksToKeep.values()).map((track: any) => ({
-        id: track.id,
-        name: track.name,
-        artist: track.artist,
-        location: track.location,
-        reason: 'Selected by strategy: ' + strategy
-      }))
-    };
-
-    this.info('DUPLICATE_RESOLUTION_COMPLETED', details);
-  }
-
   logLibraryParsing(xmlPath: string, trackCount: number, playlistCount: number): void {
     this.info('LIBRARY_PARSING_COMPLETED', {
       xmlPath,
