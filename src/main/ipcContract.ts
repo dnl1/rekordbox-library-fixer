@@ -152,5 +152,68 @@ export interface FilterRulePayload {
   value: string;
 }
 
+/** The database key, as pyrekordbox printed it on this machine. */
+export interface RecoveredDbKey {
+  key: string;
+  /** Whether pyrekordbox had to be installed first. */
+  installed: boolean;
+}
+
+export type ConversionFormatPayload = 'aiff' | 'wav' | 'mp3';
+
+/** What a FLAC conversion would do, before it runs. */
+export interface ConvertFlacPreview {
+  /** False when this build carries no ffmpeg for the platform it runs on. */
+  available: boolean;
+  flacTracks: number;
+  /** Distinct files: entries sharing one FLAC share its conversion. Includes `reusable`. */
+  files: number;
+  /**
+   * Of those, the ones whose AIFF or WAV is already there — usually a run that
+   * stopped before it wrote the library. Each is used if it decodes to exactly
+   * the FLAC's audio, and left alone if not.
+   */
+  reusable: number;
+  missing: number;
+  /** A file of the target format and the same name already there, which is left alone. */
+  conflicts: number;
+  totalSizeBytes: number;
+}
+
+export interface ConvertFlacRequest {
+  operationId: string;
+  /** The whole library, always: an original is trashed only if nothing else uses it. */
+  tracks: TrackPayload[];
+  /** Convert only these entries — a playlist on its way to a USB stick. Absent means all. */
+  scopeTrackIds?: string[];
+  libraryPath: string;
+  /** Required when `libraryPath` is a master.db. */
+  dbKey?: string;
+  format: ConversionFormatPayload;
+  /** Move each original to the trash once every entry points at its conversion. */
+  trashOriginals: boolean;
+}
+
+export interface ConvertFlacProgress {
+  operationId: string;
+  current: number;
+  total: number;
+  currentFile: string;
+  converted: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface ConvertFlacSummary {
+  filesConverted: number;
+  tracksUpdated: number;
+  skipped: Array<{ trackId: string; location?: string; reason: string }>;
+  failed: Array<{ file: string; error: string }>;
+  cancelled: boolean;
+  trashed: string[];
+  trashFailed: Array<{ file: string; error: string }>;
+  backupPath?: string;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;

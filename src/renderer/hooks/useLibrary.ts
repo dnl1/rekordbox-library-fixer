@@ -32,17 +32,6 @@ export const useLibrary = (showNotification: ShowNotification) => {
     }
   }, [showNotification]);
 
-  const selectLibrary = useCallback(async () => {
-    try {
-      const path = await window.electronAPI.selectRekordboxXML();
-      if (path) {
-        await loadLibrary(path);
-      }
-    } catch {
-      showNotification('error', 'Failed to select library file');
-    }
-  }, [loadLibrary, showNotification]);
-
   const clearStoredData = useCallback(() => {
     localStorage.removeItem('rekordboxLibraryPath');
     setLibraryPath('');
@@ -100,6 +89,31 @@ export const useLibrary = (showNotification: ShowNotification) => {
     }
   }, [showNotification]);
 
+  /**
+   * Open a library by path, whichever kind it is. Callers that reopen the
+   * library after a write — the Backups tab, broken-entry removal, FLAC
+   * conversion — used to get the XML loader, which sent a master.db through
+   * the XML parser: the parse failed and the library closed under them.
+   */
+  const openLibrary = useCallback(
+    (path: string): Promise<boolean> =>
+      (path.toLowerCase().endsWith('.db') ? loadFromDb(path) : loadLibrary(path)),
+    [loadFromDb, loadLibrary]
+  );
+
+  // The picker offers "All Files" too, and a master.db chosen there went to the
+  // XML parser. It is the only way in when the database is not in the usual place.
+  const selectLibrary = useCallback(async () => {
+    try {
+      const path = await window.electronAPI.selectRekordboxXML();
+      if (path) {
+        await openLibrary(path);
+      }
+    } catch {
+      showNotification('error', 'Failed to select library file');
+    }
+  }, [openLibrary, showNotification]);
+
   // Startup: auto-load last library if the file is still reachable.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -118,9 +132,7 @@ export const useLibrary = (showNotification: ShowNotification) => {
           // A .db path is rekordbox's own database, not an XML export: sending
           // it through the XML parser failed while the message still claimed
           // the library had been reopened.
-          const reopened = savedPath.toLowerCase().endsWith('.db')
-            ? await loadFromDb(savedPath)
-            : await loadLibrary(savedPath);
+          const reopened = await openLibrary(savedPath);
           if (reopened) {
             // Say so: restoring the last library silently made it easy to act
             // on a different one than you thought was open.
@@ -147,6 +159,7 @@ export const useLibrary = (showNotification: ShowNotification) => {
     startupComplete,
     selectLibrary,
     loadLibrary,
+    openLibrary,
     loadFromDb,
     clearStoredData,
     setLibraryData,

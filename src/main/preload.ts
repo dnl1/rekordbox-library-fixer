@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
+  ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -17,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectRekordboxDb: () => ipcRenderer.invoke('detect-rekordbox-db'),
   scanForLibraries: () => ipcRenderer.invoke('scan-for-libraries'),
   isRekordboxRunning: () => ipcRenderer.invoke('is-rekordbox-running'),
+  recoverDbKey: () => ipcRenderer.invoke('recover-db-key'),
   showSystemNotification: (data: { type: string; message: string }) =>
     ipcRenderer.invoke('show-system-notification', data),
   mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: MergePlanPayload[] }) =>
@@ -149,6 +151,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, progress: OperationProgress) => callback(progress);
     ipcRenderer.on('filter-progress', handler);
     return () => { ipcRenderer.removeListener('filter-progress', handler); };
+  },
+
+  // FLAC → AIFF / WAV
+  convertFlacPreview: (data: { tracks: TrackPayload[]; format: ConversionFormatPayload; scopeTrackIds?: string[] }) =>
+    ipcRenderer.invoke('convert-flac-preview', data),
+  convertFlac: (data: ConvertFlacRequest) => ipcRenderer.invoke('convert-flac', data),
+  cancelConvertFlac: (operationId: string) =>
+    ipcRenderer.invoke('cancel-convert-flac', operationId),
+  onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: ConvertFlacProgress) => callback(progress);
+    ipcRenderer.on('convert-flac-progress', handler);
+    return () => { ipcRenderer.removeListener('convert-flac-progress', handler); };
   },
 
   // Native drag-and-drop

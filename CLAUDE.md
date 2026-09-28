@@ -80,7 +80,44 @@ collection has to go through the database.
 - **The database key** (`src/renderer/utils/keyExtractionCommand.ts`): never hardcoded, never
   shipped. The load screen shows the one-line command for the host platform that prints the key
   locally via the open-source pyrekordbox package, and a pasted key is checked for shape (64 hex
-  characters) before it is used.
+  characters) before it is used. **Get the key automatically** (`src/main/dbKeyRecovery.ts`) runs that
+  same one-liner with the local Python — `py` first on Windows, since a bare `python` there is often the
+  Store alias — installing pyrekordbox with `pip --user` if it is missing. Fixed commands only; a test
+  keeps its one-liner identical to the one shown on screen.
+- **FLAC conversion** (`src/main/flacConverter.ts`, `rekordboxDbConverter.ts`, `conversionSettlement.ts`,
+  `ipc/conversion.ts`, `components/maintenance/ConvertFlacPanel.tsx`): FLAC → AIFF, WAV or MP3 320 kbps CBR
+  beside the original, for players that cannot read FLAC. Runs a bundled ffmpeg (`ffmpegBinary.ts`): the
+  binaries are fetched per platform and arch into `vendor/ffmpeg/` by `scripts/fetch-ffmpeg.mjs`, checked
+  against pinned SHA-256s, and shipped as `extraResources` under `resources/ffmpeg/`. Never an ffmpeg from
+  the PATH. The order is the safety: convert under a `.part` name, verify (exact sample count for AIFF/WAV,
+  a length tolerance for MP3), rename, write the library once — an AIFF/WAV already at the destination is
+  adopted only if its decoded PCM hashes the same as the FLAC's (`adopted`, never removed by cleanup), so an
+  interrupted run resumes — and only then trash an original — if asked,
+  and only when every entry that used it moved. A failed library write removes the new files. In
+  `master.db` the write also sets `FileType` (MP3 1, WAV 11, AIFF 12), `FileSize`, `BitRate`, `BitDepth`
+  and `SampleRate`, and re-checks each entry still points at the FLAC it was planned from. ffmpeg writes
+  24-bit WAV as WAVE_FORMAT_EXTENSIBLE, which older CDJs refuse, so the header is patched in place to
+  plain PCM plus a `JUNK` chunk of the same size. `music-metadata` is required rather than imported in
+  the converter: the renderer's tsconfig also checks `src/main` and resolves the package to its browser
+  build, which has no `parseFile`. A run can be limited to a playlist or folder (`scopeTrackIds`,
+  listed by `src/renderer/utils/playlistScopes.ts`) — the step before exporting that playlist to USB from
+  rekordbox, which copies the converted files; the app does not write USB exports itself. The whole
+  library is still sent, because an original may be trashed only if no entry outside the scope uses it
+  (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertFlacSession.ts`, not
+  the panel: the library reload after a write replaces the whole page with a spinner, which unmounted the
+  panel at the moment its result arrived.
+- **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),
+  which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
+  `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's
+  own spelling, derived from the stored path rather than rebuilt with `path.join`. Used by the FLAC
+  conversion; the relocator, broken-entry check, player and fingerprinting do not use it yet.
+- **Reopening a library** (`openLibrary` in `src/renderer/hooks/useLibrary.ts`): the context's
+  `onLoadLibrary` picks the database reader for a `.db` path and the XML parser otherwise. It used to be
+  the XML loader alone, so every reopen after a database write closed the library instead.
+- **POSITION_MARK** (`src/main/rekordboxParser.ts`): rekordbox writes `Type` as a number — 0 cue,
+  1 fade-in, 2 fade-out, 3 load, 4 loop — and `Num` as -1 for a memory cue, 0/1/2… for hot cue A/B/C,
+  with `Red`/`Green`/`Blue` on coloured marks. The parser looked for the words `CUE`/`LOOP`, so every XML
+  save dropped every cue and loop; both directions now follow the spec in `assets/`.
 - **Write guard** (`src/main/librarySource.ts`): every *XML* write path refuses a `.db` path.
   The XML writer writes to `libraryPath`, so a database-backed library would otherwise have
   been overwritten with XML and destroyed. Database-backed libraries go through the
@@ -169,6 +206,7 @@ npm run dev:electron # Build main process and start Electron
 npm run build        # Build both renderer and main process
 npm run build:vite   # Build renderer process only
 npm run build:main   # Compile main process TypeScript
+pnpm fetch:ffmpeg    # Fetch ffmpeg for this machine into vendor/ (dev:electron and dist* do it too)
 npm run dist         # Create distributable package
 ```
 
@@ -225,6 +263,8 @@ exposed through `window.electronAPI`:
 - `autoRelocateTracks(tracks, options, libraryPath)`: Sequential auto-relocation with progress tracking
 - `cancelAutoRelocate(operationId)`: Cancel active auto-relocation operation
 - `showFileInFolder(path)`: Open file location in system file manager; reports back when the file is gone
+- `convertFlacPreview(data)` / `convertFlac(request)` / `cancelConvertFlac(id)` / `onConvertFlacProgress(cb)`:
+  FLAC conversion, writing into `master.db` or the XML depending on what is open
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with
   `dbKey`) / `removeEntriesInDb(data)`: the database-native writes, each requiring rekordbox to be closed
   and taking a backup first
@@ -292,7 +332,8 @@ src/renderer/
 │   │   ├── PopoverButton.tsx      # Shared tooltip button component
 │   │   ├── EmptyLibraryState.tsx  # The home screen: database first, XML below
 │   │   └── index.ts               # Barrel exports
-│   ├── maintenance/               # Three unrelated tools, one per file
+│   ├── maintenance/               # Unrelated tools, one per file
+│   │   ├── ConvertFlacPanel.tsx   # FLAC → AIFF / WAV / MP3 for older players
 │   │   ├── ConsolidatePanel.tsx   # Gather the library onto one drive
 │   │   ├── FilterMovePanel.tsx    # Move the part that matches some rules
 │   │   └── shared.tsx             # What both genuinely share

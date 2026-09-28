@@ -57,7 +57,7 @@ I'm aware of commercial tools like Rekordbox Collection Tool (RCT) by MixMasterG
 
 Resolving duplicates, relocating tracks and removing dead entries all write back into `master.db` itself, because a Rekordbox XML import can only add and update tracks — it can never remove one. That is why an XML round-trip leaves every duplicate in place. Writing is deliberately hedged: Rekordbox must be closed, a backup is taken first and is mandatory **and verified** (a truncated copy is refused rather than trusted), playlist links are re-pointed at the kept entry before anything is removed, and Rekordbox's own update counter is bumped so it notices the change on next launch.
 
-**The key.** The app ships no key and never has. The load screen shows the one-line command for your platform — PowerShell on Windows, a terminal on macOS and Linux — that prints it on your own machine by asking the open-source [pyrekordbox](https://github.com/dylanljones/pyrekordbox) package. Copy, run, paste once; it stays on your machine.
+**The key.** The app ships no key and never has. The load screen shows the one-line command for your platform — PowerShell on Windows, a terminal on macOS and Linux — that prints it on your own machine by asking the open-source [pyrekordbox](https://github.com/dylanljones/pyrekordbox) package. Copy, run, paste once; it stays on your machine. Or press **Get the key automatically**: the app runs that same command with the Python on your machine — installing pyrekordbox for your user the first time — and opens the database with the key it prints.
 
 ### Library tab
 The first tab in the sidebar. With nothing loaded it holds the picker, including the libraries found on your system. With a library open it shows what is loaded — file name, full path, track count, playlists, missing files and duplicate entries — and lets you close it or switch to another one. Backups and History stay reachable at all times, even with no library loaded.
@@ -126,6 +126,25 @@ Finds library entries whose path can never resolve to a file — a path pointing
 Tracks whose file is merely **gone** are behind an opt-in tick box. The relocator is usually the better answer, and removing one throws away its cues and its playlist slots — but a library can hold thousands that will never be found again, and there was no way to clear those at all.
 
 Streaming tracks are never listed, whatever you tick. Every id is re-checked against the library before it goes, so an entry whose file turns out to be there — a drive that was unmounted during the scan and is back now — is left alone and reported.
+
+### Convert FLAC for older players
+Older CDJs and XDJs cannot play FLAC, and a FLAC collection finds that out at the club. **Maintenance → Convert FLAC** converts every FLAC in the library to a file beside it, under the same name, and points each entry at the new file. Cues, loops, beatgrids and playlists stay with the track — only what the file is changes.
+
+| Target | What you get |
+|--------|--------------|
+| **AIFF** (recommended) | Lossless and sample-exact, same bit depth and sample rate. Tags and artwork are kept (ID3v2.3), which rekordbox reads. |
+| **WAV** | Lossless and sample-exact. The header is written as plain PCM, which older CDJs require. Tags and artwork mostly do not survive — WAV has nowhere rekordbox reads them from. |
+| **MP3 320 kbps** | A quarter of the size, constant bit rate (older CDJs misjudge the length of a variable-rate file). Lossy, and not sample-exact: the encoder adds a few milliseconds at the start, so on a player that ignores the gapless header cues land slightly late. High-resolution FLAC is resampled to 44.1 or 48 kHz. |
+
+**Converting for a USB export.** Pick the playlist (or folder) you are about to export instead of the whole library, convert it, then export that playlist from rekordbox as usual — rekordbox copies the converted files to the stick. Only the chosen entries are converted; a FLAC that an entry outside the playlist still uses is never sent to the trash, even with the trash option ticked.
+
+Every converted file is written under a temporary name and checked before it takes the real one — same sample rate, channels and bit depth, and for AIFF and WAV the exact same number of samples. A file already sitting at the destination is never overwritten. If it is an AIFF or WAV — usually left by a run that stopped before writing the library — it is decoded and compared with the FLAC, and used as it is when the audio is identical; a run can be picked up where it stopped instead of finding nothing to do. The originals stay unless you tick **Move the FLAC originals to the trash**, and even then an original goes only once every entry that used it points at its conversion. On `master.db` rekordbox must be closed and a backup is taken first; if the database write fails, the new files are removed again and the FLACs were never touched.
+
+An XML library can be converted too, but rekordbox matches an imported track by its location, so importing the XML adds the converted files as new tracks next to the FLACs. Open the database instead to convert in place.
+
+Running the app under WSL against a Windows library works too: rekordbox's `C:/…` paths are reached through `/mnt/c/…` for the conversion, and written back as `C:/…`.
+
+The conversion uses a bundled [ffmpeg](https://ffmpeg.org/): the [ffmpeg-static b6.1.1](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1) builds, licensed under the GPL, whose text ships next to the binary. ffmpeg runs as a separate program and is not part of this app's code. Its source is at [ffmpeg.org/download](https://ffmpeg.org/download.html#get-sources); each build's README in that release names the exact upstream build it came from. There is no build for 32-bit Windows; the tool says so there.
 
 ### Backups
 A backup manager reachable at any time, with or without a library loaded. Lists every backup the app has taken, restores one (writing a safety copy of the current state first), and asks whether you want to load the restored library straight away.
@@ -209,8 +228,9 @@ Alternatively, right-click the app and choose **Open**, then click **Open** in t
 ```bash
 git clone https://github.com/koraysels/rekordbox-library-fixer.git
 cd rekordbox-library-fixer
-npm install
-npm run dev
+pnpm install
+pnpm fetch:ffmpeg   # the ffmpeg the FLAC conversion runs; pnpm dev fetches it too
+pnpm dev
 ```
 
 ---

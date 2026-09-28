@@ -9,16 +9,17 @@
   "scripts": {
     "dev": "concurrently \"pnpm dev:vite\" \"pnpm dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "pnpm build:main && NODE_ENV=development electron .",
+    "dev:electron": "pnpm fetch:ffmpeg && pnpm build:main && NODE_ENV=development electron .",
     "build": "pnpm typecheck && pnpm build:vite && pnpm build:main",
     "build:check": "pnpm lint:check && pnpm build",
     "build:vite": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
-    "dist": "pnpm clean:release && pnpm build && electron-builder",
-    "dist:mac": "pnpm clean:release && pnpm build && electron-builder --mac",
-    "dist:win": "pnpm clean:release && pnpm build && electron-builder --win",
-    "dist:linux": "pnpm clean:release && pnpm build && electron-builder --linux",
-    "dist:all": "pnpm clean:release && pnpm build && electron-builder --mac --win --linux",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "dist": "pnpm clean:release && pnpm fetch:ffmpeg && pnpm build && electron-builder",
+    "dist:mac": "pnpm clean:release && node scripts/fetch-ffmpeg.mjs --platform darwin --arch x64,arm64 && pnpm build && electron-builder --mac",
+    "dist:win": "pnpm clean:release && node scripts/fetch-ffmpeg.mjs --platform win32 --arch x64,ia32 && pnpm build && electron-builder --win",
+    "dist:linux": "pnpm clean:release && node scripts/fetch-ffmpeg.mjs --platform linux --arch x64 && pnpm build && electron-builder --linux",
+    "dist:all": "pnpm clean:release && node scripts/fetch-ffmpeg.mjs --platform darwin --arch x64,arm64 && node scripts/fetch-ffmpeg.mjs --platform win32 --arch x64,ia32 && node scripts/fetch-ffmpeg.mjs --platform linux --arch x64 && pnpm build && electron-builder --mac --win --linux",
     "test": "pnpm test:unit && pnpm test:e2e",
     "test:unit": "vitest",
     "test:unit:ui": "vitest --ui",
@@ -202,6 +203,12 @@
         }
       ]
     },
+    "extraResources": [
+      {
+        "from": "vendor/ffmpeg/${platform}-${arch}",
+        "to": "ffmpeg"
+      }
+    ],
     "asarUnpack": [
       "**/node_modules/better-sqlite3-multiple-ciphers/**"
     ]

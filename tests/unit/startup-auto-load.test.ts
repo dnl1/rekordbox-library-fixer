@@ -78,4 +78,22 @@ describe('useLibrary startup auto-load', () => {
     expect(result.current.libraryData).toBeNull();
     expect(localStorage.getItem('rekordboxLibraryPath')).toBeNull();
   });
+
+  it('reopens a database through the database reader, not the XML parser', async () => {
+    // Reopening after a write — Backups, broken entries, FLAC conversion —
+    // sent master.db to the XML parser, which failed and closed the library.
+    const { useSettingsStore } = await import('../../src/renderer/stores/settingsStore');
+    useSettingsStore.getState().setRekordboxDbKey('a'.repeat(64));
+    window.electronAPI.parseRekordboxDb = vi.fn().mockResolvedValue({
+      success: true,
+      data: { libraryPath: '/p/master.db', tracks: new Map(), playlists: [] },
+    });
+
+    const { result } = renderHook(() => useLibrary(mockShowNotification));
+    await waitFor(() => expect(result.current.startupComplete).toBe(true));
+    await result.current.openLibrary('/p/master.db');
+
+    expect(window.electronAPI.parseRekordboxDb).toHaveBeenCalledWith({ dbPath: '/p/master.db', key: 'a'.repeat(64) });
+    expect(window.electronAPI.parseRekordboxLibrary).not.toHaveBeenCalledWith('/p/master.db');
+  });
 });
