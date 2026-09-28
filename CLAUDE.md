@@ -127,6 +127,16 @@ collection has to go through the database.
   FLAC matches a 24-bit AIFF another tool made). `master.db` only — an XML library does not say what rekordbox
   itself uses. Nothing is written into the database; its locations are re-read (`parseDb`, on a copy) after the
   checks and before the trash, and a cancelled run trashes nothing. A FLAC an entry still uses is Convert's job.
+- **Auto hot cues** (`src/main/anlzReader.ts`, `autoHotCue.ts`, `rekordboxDbHotCues.ts`, `ipc/hotCues.ts`,
+  `components/maintenance/AutoHotCuePanel.tsx`): hot cues from rekordbox's own phrase analysis, for tracks with no
+  hot cue at all (memory cues do not count and are kept). `anlzReader` reads `PQTZ` and `PSSI` out of the ANLZ
+  files, unmasking `PSSI`; checked identical to pyrekordbox on a real library, and it reads nine files pyrekordbox
+  cannot. One cue per section (a run of phrases of one kind), on the phrase or a bar before, named after it, A–H in
+  time order; with more than eight sections, intro and outro first, then drops and breakdowns, build-ups and verses
+  last — keeping the first eight left most tracks with nothing cued in their second half. A grid that is not
+  strictly increasing is refused (a real library has one that jumps back). The write re-checks each track still has
+  no hot cue, with rekordbox closed and a backup first. No colours yet: how `Color`/`ColorTableIndex` map to
+  rekordbox's hot cue palette is not verified, so cues are written uncoloured (`Color` -1).
 - **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),
   which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
   `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's
@@ -298,6 +308,8 @@ exposed through `window.electronAPI`:
 - `showFileInFolder(path)`: Open file location in system file manager; reports back when the file is gone
 - `convertFlacPreview(data)` / `convertFlac(request)` / `cancelConvertFlac(id)` / `onConvertFlacProgress(cb)`:
   FLAC conversion, writing into `master.db` or the XML depending on what is open
+- `autoHotCuePreview(request)` / `autoHotCueWrite(request)`: suggest hot cues from the phrase analysis (read on a
+  copy), then write the ticked tracks' cues into `master.db`
 - `cleanupFlacPreview(data)` / `cleanupFlac(request)` / `onCleanupFlacProgress(cb)`: trash the FLACs a conversion
   left behind (cancelled through `cancelConvertFlac`, which shares the table of runs in flight)
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with

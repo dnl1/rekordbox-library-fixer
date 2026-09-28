@@ -240,7 +240,7 @@ export async function keyOpensDatabase(dbPath: string, key: string): Promise<boo
   }
 }
 
-async function withReadOnlyCopy<T>(dbPath: string, key: string, read: (db: Db) => T): Promise<T> {
+export async function withReadOnlyCopy<T>(dbPath: string, key: string, read: (db: Db) => T): Promise<T> {
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rbdb-'));
   const copy = path.join(dir, 'master.db');
   await fs.promises.copyFile(dbPath, copy);

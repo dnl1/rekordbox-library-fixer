@@ -7,11 +7,13 @@ import { ConsolidatePanel } from '../maintenance/ConsolidatePanel';
 import { FilterMovePanel } from '../maintenance/FilterMovePanel';
 import { ConvertFlacPanel } from '../maintenance/ConvertFlacPanel';
 import { CleanupFlacPanel } from '../maintenance/CleanupFlacPanel';
+import { AutoHotCuePanel } from '../maintenance/AutoHotCuePanel';
 
 /**
  * Independent tools, each owning its own state: clearing out entries that can
  * never resolve to a file, converting FLAC for players that cannot read it and
- * trashing the FLACs a conversion left behind,
+ * trashing the FLACs a conversion left behind, adding hot cues from rekordbox's
+ * phrase analysis,
  * gathering the library onto one drive, and moving a filtered part of it. They
  * lived in one file and shared nothing but a scroll bar, with the second tool's
  * state distinguished only by an "f" prefix.
@@ -31,6 +33,7 @@ export const MaintenancePage: React.FC = () => {
 
       <ConvertFlacPanel />
       <CleanupFlacPanel />
+      <AutoHotCuePanel />
       <ConsolidatePanel tracks={tracks} libraryPath={libraryPath} hasLibrary={hasLibrary} />
       <FilterMovePanel tracks={tracks} libraryPath={libraryPath} hasLibrary={hasLibrary} />
 

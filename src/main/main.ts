@@ -11,6 +11,7 @@ import { registerMaintenanceIpc } from './ipc/maintenance';
 import { registerBackupIpc } from './ipc/backups';
 import { registerSystemIpc } from './ipc/system';
 import { registerConversionIpc } from './ipc/conversion';
+import { registerHotCueIpc } from './ipc/hotCues';
 
 
 // Must run before app ready — grants media:// streaming + fetch privileges.
@@ -286,6 +287,7 @@ app.whenReady().then(async () => {
   registerBackupIpc();
   registerSystemIpc();
   registerConversionIpc();
+  registerHotCueIpc();
 
   // Database storage is now handled via Dexie in the renderer process
   safeConsole.log('✅ Application initialized');

@@ -252,5 +252,55 @@ export interface FlacCleanupSummary {
   cancelled: boolean;
 }
 
+/** One suggested hot cue. */
+export interface AutoHotCuePayload {
+  /** 0 for A through 7 for H. */
+  slot: number;
+  /** `djmdCue.Kind` for the slot — 1, 2, 3, 5, 6, 7, 8, 9. */
+  kind: number;
+  /** The phrase it starts: Intro, Up, Down, Chorus, Outro… */
+  name: string;
+  ms: number;
+}
+
+export interface AutoHotCueTrack {
+  trackId: string;
+  title: string;
+  artist: string;
+  location: string;
+  cues: AutoHotCuePayload[];
+}
+
+export interface AutoHotCuePreviewRequest {
+  libraryPath: string;
+  dbKey: string;
+  /** Limit to a playlist or folder. Absent means the whole collection. */
+  scopeTrackIds?: string[];
+  /** 0 puts each cue on its phrase, 4 a bar before it. */
+  beatsBefore: number;
+}
+
+export interface AutoHotCuePreview {
+  tracks: AutoHotCueTrack[];
+  /** Left out: they already have a hot cue. */
+  alreadyCued: number;
+  /** Left out: no phrase analysis, or no beatgrid to place cues on — analyse them in rekordbox. */
+  notAnalysed: number;
+}
+
+export interface AutoHotCueWriteRequest {
+  libraryPath: string;
+  dbKey: string;
+  /** The previewed cues of the tracks that stayed ticked. */
+  tracks: Array<{ trackId: string; cues: Array<{ kind: number; name: string; ms: number }> }>;
+}
+
+export interface AutoHotCueWriteSummary {
+  tracksWritten: number;
+  cuesWritten: number;
+  skipped: Array<{ trackId: string; reason: string }>;
+  backupPath: string;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;

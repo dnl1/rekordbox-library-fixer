@@ -52,8 +52,15 @@ export const audioController = {
     };
   },
 
-  async playTrack(track: PlayerTrack): Promise<void> {
+  /** `startAt`, in seconds, plays from a point — a suggested hot cue — rather than the top. */
+  async playTrack(track: PlayerTrack, startAt?: number): Promise<void> {
     if (!audio) { return; }
+    const current = usePlayerStore.getState().currentTrack;
+    if (startAt !== undefined && current?.id === track.id && audio.src) {
+      audio.currentTime = startAt;
+      if (audio.paused) { audio.play().catch(() => sync({ status: 'error', errorMessage: 'Playback failed' })); }
+      return;
+    }
     const seq = ++loadSeq;
     sync({ currentTrack: track, status: 'loading', errorMessage: null });
     try {
@@ -62,6 +69,16 @@ export const audioController = {
       cleanupSrc();
       revokeCurrent = revoke;
       audio.src = src;
+      if (startAt !== undefined) {
+        // A position set before the length is known is dropped, so wait for it.
+        const el = audio;
+        const loaded = await new Promise<boolean>((resolve) => {
+          el.addEventListener('loadedmetadata', () => resolve(true), { once: true });
+          el.addEventListener('error', () => resolve(false), { once: true });
+        });
+        if (!loaded || seq !== loadSeq) { return; }
+        el.currentTime = startAt;
+      }
       await audio.play();
     } catch (err) {
       if (seq !== loadSeq) { return; }

@@ -3,6 +3,7 @@ import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
   ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
+  AutoHotCuePreviewRequest, AutoHotCueWriteRequest,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -169,6 +170,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('cleanup-flac-progress', handler);
     return () => { ipcRenderer.removeListener('cleanup-flac-progress', handler); };
   },
+
+  // Auto hot cues from rekordbox's phrase analysis
+  autoHotCuePreview: (data: AutoHotCuePreviewRequest) => ipcRenderer.invoke('auto-hot-cue-preview', data),
+  autoHotCueWrite: (data: AutoHotCueWriteRequest) => ipcRenderer.invoke('auto-hot-cue-write', data),
 
   // Native drag-and-drop
   handleNativeDrop: (filePaths: string[]) => ipcRenderer.invoke('handle-native-drop', filePaths),

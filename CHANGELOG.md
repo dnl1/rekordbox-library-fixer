@@ -5,6 +5,8 @@
 ### 🎉 New Features
 - **Clean up converted FLACs**: Maintenance → Clean up converted FLACs finds each FLAC left beside the AIFF or WAV the library now uses — a conversion run without "move the originals to the trash", or one made by another tool — and moves it to the trash. Only a FLAC no entry points at goes, only when an entry points at the file beside it, and only when the two decode to exactly the same audio; the same name is not proof. What rekordbox points at is read again just before anything goes, so rekordbox may stay open, and nothing is written into the database. For rekordbox's database only.
 
+- **Auto hot cues**: Maintenance → Auto hot cues puts a hot cue at the start of each section rekordbox's phrase analysis found — Intro, Up, Down, Chorus, Outro — on tracks with no hot cue at all, named after the section, on the phrase or a bar before it. A track with more sections than the eight hot cues keeps its intro, outro, drops and breakdowns first. Every suggestion can be listened to and each track unticked before anything is written; a track that got a hot cue meanwhile is left alone, and memory cues are never touched. For rekordbox's database, with rekordbox closed and a backup first. Tracks rekordbox has not phrase-analysed are listed to analyse first. Cues are not coloured yet.
+
 ### 🐛 Bug Fixes
 - **Hot cues keep their letter when a database library is written as XML**: rekordbox's database numbers hot cues A–H as 1, 2, 3, 5, 6, 7, 8, 9, and the XML as 0–7. The number was passed straight across, so A became B and D onwards moved two letters; hot loops lost their slot altogether and went out as memory loops.
 
