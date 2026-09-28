@@ -85,7 +85,7 @@ describe('EmptyLibraryState', () => {
   it('gets the key itself and opens the database with it', async () => {
     useSettingsStore.setState({ rekordboxDbKey: '' } as any);
     const key = 'ab'.repeat(32);
-    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: true, data: { key, installed: false, source: 'package' } }));
+    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: true, data: { key } }));
     show([DB]);
     fireEvent.click(await screen.findByTitle(DB.path));
     fireEvent.click(screen.getByRole('button', { name: /Get the key automatically/ }));

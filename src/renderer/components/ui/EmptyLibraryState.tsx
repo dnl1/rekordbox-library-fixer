@@ -40,9 +40,9 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
   const [recovering, setRecovering] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  // The same pyrekordbox command, run by the app: nobody has to copy it into a
-  // terminal and paste the result back. It installs pyrekordbox for the user
-  // the first time, which is why it waits for a click.
+  // The key straight out of the pyrekordbox package, so nobody has to copy a
+  // command into a terminal and paste the result back. It downloads from PyPI,
+  // which is why it waits for a click.
   const recoverKey = async () => {
     setRecovering(true);
     setRecoveryError(null);
@@ -180,7 +180,7 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
               <p className="text-[10px] font-te-mono text-te-grey-500 normal-case leading-relaxed mb-3">
                 Downloads the open-source pyrekordbox package from PyPI (checked against its published
                 hash), reads the key out of it the way pyrekordbox does, checks it opens this database, and
-                opens it. No Python needed; if that fails, it runs the command below with your Python.
+                opens it. Offline? Run the command below instead and paste what it prints.
               </p>
               {recoveryError && (
                 <p className="text-[11px] font-te-mono text-red-500 normal-case mb-3">{recoveryError}</p>

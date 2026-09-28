@@ -155,10 +155,6 @@ export interface FilterRulePayload {
 /** The database key, as pyrekordbox printed it on this machine. */
 export interface RecoveredDbKey {
   key: string;
-  /** Whether pyrekordbox had to be installed first (the Python route only). */
-  installed: boolean;
-  /** Read from the pyrekordbox package directly, or printed by it under Python. */
-  source: 'package' | 'python';
 }
 
 export type ConversionFormatPayload = 'aiff' | 'wav' | 'mp3';

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { app, ipcMain, dialog } from 'electron';
+import { ipcMain, dialog } from 'electron';
 import { runtime } from '../runtime';
 import { detectRekordboxDb } from '../rekordboxDbLocator';
 import { scanForLibraries } from '../libraryScanner';
@@ -7,7 +7,6 @@ import { isRekordboxRunning } from '../rekordboxRunning';
 import { handleParseRekordboxDb } from '../rekordboxDbIpc';
 import { parseDb, keyOpensDatabase } from '../rekordboxDbParser';
 import { assertWritableLibraryPath } from '../librarySource';
-import { recoverDbKey } from '../dbKeyRecovery';
 import { keyFromPyrekordboxPackage } from '../dbKeyFromPackage';
 import type { IpcResult, RecoveredDbKey } from '../ipcContract';
 
@@ -95,28 +94,18 @@ export function registerLibraryIpc(): void {
   ipcMain.handle('scan-for-libraries', async () => scanForLibraries());
 
   /**
-   * The key, from pyrekordbox, two ways. First the package itself, fetched
-   * from PyPI and read here — no Python needed. Then, if that cannot be done
-   * (offline, a pyrekordbox that keeps the key elsewhere), by running it with
-   * the machine's Python. Either way the key is checked against the database
-   * the user is opening before it is handed back.
+   * The key, read out of the pyrekordbox package — fetched from PyPI, checked
+   * against its pinned hash — and tried on the database being opened before it
+   * is handed back. No Python is involved; offline, the key panel still shows
+   * the command that prints it, for pasting by hand.
    */
   ipcMain.handle('recover-db-key', async (_e, dbPath?: string): Promise<IpcResult<RecoveredDbKey>> => {
-    const opensDatabase = dbPath ? (key: string) => keyOpensDatabase(dbPath, key) : undefined;
-
-    const fromPackage = await keyFromPyrekordboxPackage({ opensDatabase });
-    if (fromPackage.ok) {
-      return { success: true, data: { key: fromPackage.key, installed: false, source: 'package' } };
-    }
-
-    // pyrekordbox goes into an environment of the app's own if the machine's
-    // Python lacks it, so the user's packages are left alone.
-    const viaPython = await recoverDbKey(process.platform, undefined, path.join(app.getPath('userData'), 'pyrekordbox'));
-    if (viaPython.ok && (!opensDatabase || await opensDatabase(viaPython.key))) {
-      return { success: true, data: { key: viaPython.key, installed: viaPython.installed, source: 'python' } };
-    }
-    const pythonDetail = viaPython.ok ? 'the key pyrekordbox gives does not open this database' : viaPython.detail;
-    return { success: false, error: `${capitalise(fromPackage.detail)}. With Python: ${pythonDetail}` };
+    const outcome = await keyFromPyrekordboxPackage({
+      opensDatabase: dbPath ? (key: string) => keyOpensDatabase(dbPath, key) : undefined,
+    });
+    return outcome.ok
+      ? { success: true, data: { key: outcome.key } }
+      : { success: false, error: `${capitalise(outcome.detail)}. You can still paste the key by hand.` };
   });
 
   ipcMain.handle('is-rekordbox-running', async () => ({ running: isRekordboxRunning() }));

@@ -196,7 +196,7 @@ declare global {
       detectRekordboxDb: () => Promise<{ found: boolean; dbPath: string | null; variant: string | null }>;
       scanForLibraries: () => Promise<Array<{ kind: 'database' | 'xml'; path: string; label: string; size: number; modified: string }>>;
       isRekordboxRunning: () => Promise<{ running: boolean }>;
-      /** Reads the key out of pyrekordbox (or runs it with Python) and checks it opens `dbPath`. */
+      /** Reads the key out of the pyrekordbox package and checks it opens `dbPath`. */
       recoverDbKey: (dbPath?: string) => Promise<IpcResult<RecoveredDbKey>>;
       showSystemNotification?: (data: { type: string; message: string }) => Promise<{ success: boolean }>;
       mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: Array<{ keepId: string; removeIds: string[] }> }) => Promise<{ success: boolean; entriesRemoved?: number; playlistLinksMoved?: number; backupPath?: string; error?: string }>;
