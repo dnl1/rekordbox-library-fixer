@@ -6,7 +6,12 @@ import { formatDuration, formatFileSize } from './formatters';
  *
  * The path is never a difference. Every copy of a song lives somewhere else,
  * so "the path differs" is true of every set and says nothing about the files;
- * it is shown on each copy anyway.
+ * it is shown on each copy anyway. Nor is the date added: it says when an entry
+ * joined the collection, not what the file is.
+ *
+ * A value is compared as it is shown. Two sizes a few kilobytes apart — a tag
+ * rewritten — read alike on screen, and flagging them sent people looking for
+ * a difference they could not see.
  */
 
 export interface DiffTrack {
@@ -49,8 +54,6 @@ interface Field {
   field: string;
   label: string;
   show: (t: DiffTrack) => string;
-  /** What is compared, when it is finer than what is shown. */
-  compare?: (t: DiffTrack) => string;
 }
 
 const FIELDS: Field[] = [
@@ -59,8 +62,7 @@ const FIELDS: Field[] = [
   { field: 'sampleRate', label: 'Sample rate', show: (t) => (t.sampleRate ? `${t.sampleRate / 1000} kHz` : NONE) },
   { field: 'bitDepth', label: 'Bit depth', show: (t) => (t.bitDepth ? `${t.bitDepth}-bit` : NONE) },
   { field: 'duration', label: 'Length', show: (t) => (t.duration ? formatDuration(Math.round(t.duration)) : NONE) },
-  // Exact bytes decide: the display rounds, so two sizes can differ and read alike.
-  { field: 'size', label: 'Size', show: (t) => (t.size ? formatFileSize(t.size) : NONE), compare: (t) => String(t.size ?? '') },
+  { field: 'size', label: 'Size', show: (t) => (t.size ? formatFileSize(t.size) : NONE) },
   { field: 'artist', label: 'Artist', show: (t) => t.artist?.trim() || NONE },
   { field: 'name', label: 'Title', show: (t) => t.name?.trim() || NONE },
   { field: 'album', label: 'Album', show: (t) => t.album?.trim() || NONE },
@@ -70,19 +72,14 @@ const FIELDS: Field[] = [
   { field: 'rating', label: 'Rating', show: (t) => `${t.rating || 0}/5` },
   { field: 'cues', label: 'Cues', show: (t) => String(t.cues?.length ?? 0) },
   { field: 'loops', label: 'Loops', show: (t) => String(t.loops?.length ?? 0) },
-  {
-    field: 'dateAdded',
-    label: 'Added',
-    show: (t) => (t.dateAdded ? new Date(t.dateAdded).toISOString().slice(0, 10) : NONE),
-  },
 ];
 
 /** The fields on which the copies do not all agree, in order of what matters most. */
 export function trackDifferences(tracks: DiffTrack[]): TrackDifference[] {
   if (tracks.length < 2) { return []; }
   const out: TrackDifference[] = [];
-  for (const { field, label, show, compare = show } of FIELDS) {
-    if (new Set(tracks.map(compare)).size < 2) { continue; }
+  for (const { field, label, show } of FIELDS) {
+    if (new Set(tracks.map(show)).size < 2) { continue; }
     const values: Record<string, string> = {};
     for (const t of tracks) { values[t.id] = show(t); }
     out.push({ field, label, values });

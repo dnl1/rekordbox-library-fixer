@@ -174,8 +174,8 @@ collection has to go through the database.
   `src/renderer/utils/trackDifferences.ts`): every set says its method and the fields that were equal. What was called
   "fingerprint" compares file size, length, bitrate and the first 1 MB — it finds copies of one file only, so it is
   shown as "Identical files"; the same song as AIFF and WAV, or from two shops, needs Metadata. Each set also lists
-  where its copies differ — format, bitrate, sample rate, bit depth, length, exact size, tags, BPM, key, rating, cues,
-  loops, date added — and never the path, which differs for every copy and says nothing about the files. The database
+  where its copies differ — format, bitrate, sample rate, bit depth, length, size, tags, BPM, key, rating, cues,
+  loops — compared as shown, and never the path or the date added, which say nothing about the files. The database
   reader supplies sample rate, bit depth and key for this.
 - **Duplicate kinds** (`src/renderer/utils/classifyDuplicateSet.ts`): distinguishes several
   entries pointing at one file from genuinely duplicated files, which decides whether
@@ -188,6 +188,10 @@ collection has to go through the database.
   "Highest quality" ranks by `qualityTier` (`src/main/audioQuality.ts`, pure so the renderer imports it too;
   Consolidate's "Use quality score" uses the same): AIFF, then WAV (and FLAC when preferred), then lossy —
   AIFF over WAV because WAV carries almost no tags or artwork. Bitrate, sample rate and size only break ties.
+  Any set's keeper can be changed with "Keep this" on another copy, whatever the strategy
+  (`src/renderer/stores/keeperChoiceStore.ts`, `utils/keeperOfSet.ts`): the choice beats the recommendation in the
+  card, the delete modal and the plans alike. It used to live in the card alone, so "manual" kept the first copy
+  whatever was picked; a manual set with nothing picked is now refused instead. Choices are not persisted.
   Before merging, the main process re-checks each set (`src/main/keeperGuard.ts`): if the kept copy's file is
   not there — the consolidate drive unplugged — while a retired copy's file is, the set is left untouched and
   reported as `skipped`, so a merge never points a song at nothing and trashing never takes the only file.

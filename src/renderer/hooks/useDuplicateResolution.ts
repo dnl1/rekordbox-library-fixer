@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import type { ShowNotification } from '../types';
 import { useSettingsStore } from '../stores/settingsStore';
 import { pickRecommendedTrack } from '../utils/pickRecommendedTrack';
+import { keeperOfSet } from '../utils/keeperOfSet';
+import { useKeeperChoiceStore } from '../stores/keeperChoiceStore';
 import { normalizePathForCompare } from '../utils/normalizePath';
 import { looksLikePlayableFile } from '../utils/classifyDuplicateSet';
 import { duplicationHistoryStorage, type ActivityDetail } from '../db/duplicationHistoryDb';
@@ -75,16 +77,33 @@ export function useDuplicateResolution({
   const isDatabase = libraryPath.toLowerCase().endsWith('.db');
 
   /**
-   * The copy each set keeps. One choice, made here, drives the badge's rules,
-   * the delete modal, the write and the history — the main process no longer
-   * picks on its own, so what you confirm is what happens.
+   * The copy each set keeps: the one chosen on its card, else the strategy's.
+   * One choice, made here, drives the badge's rules, the delete modal, the
+   * write and the history — the main process no longer picks on its own, so
+   * what you confirm is what happens. Null only for a manual set with no choice.
    */
-  const keeperOf = useCallback((set: any) => {
+  const keeperOrNull = useCallback((set: any) => {
     const { consolidateDestination } = useSettingsStore.getState();
-    return pickRecommendedTrack(
+    const recommended = pickRecommendedTrack(
       set.tracks, resolutionStrategy, set.pathPreferences, scanOptions.preferLossless, consolidateDestination
-    ) ?? set.tracks[0];
+    );
+    return keeperOfSet(set.tracks, recommended, useKeeperChoiceStore.getState().chosen[set.id]);
   }, [resolutionStrategy, scanOptions.preferLossless]);
+
+  /** Only called once `waitingForChoice` found every set has a keeper. */
+  const keeperOf = useCallback((set: any) => keeperOrNull(set) ?? set.tracks[0], [keeperOrNull]);
+
+  /** The selected sets that have no copy to keep yet — manual, and nothing picked. */
+  const waitingForChoice = useCallback(() => {
+    const waiting = duplicates.filter((d) => selectedDuplicates.has(d.id) && !keeperOrNull(d)).length;
+    if (waiting > 0) {
+      showNotification(
+        'error',
+        `Pick the copy to keep in ${waiting} set${waiting === 1 ? '' : 's'} first — press "Keep this" on it.`
+      );
+    }
+    return waiting > 0;
+  }, [duplicates, selectedDuplicates, keeperOrNull, showNotification]);
 
   const plansFor = useCallback((sets: any[]) => sets.map((d: any) => {
     const keepId = keeperOf(d).id;
@@ -162,6 +181,7 @@ export function useDuplicateResolution({
   }, [duplicates, selectedDuplicates, plansFor, libraryPath, showNotification, setDuplicates, clearAll, setIsScanning, onLoadLibrary]);
 
   const executeResolve = useCallback(async (withDelete: boolean) => {
+    if (waitingForChoice()) { return; }
     if (isDatabase) {
       await resolveInDatabase(withDelete);
       return;
@@ -252,13 +272,14 @@ export function useDuplicateResolution({
     } finally {
       setIsScanning(false);
     }
-  }, [isDatabase, resolveInDatabase, duplicates, selectedDuplicates, libraryPath, plansFor, keeperOf, libraryData, setDuplicates, setSelections, setLibraryData, showNotification, setIsScanning]);
+  }, [isDatabase, resolveInDatabase, duplicates, selectedDuplicates, libraryPath, plansFor, keeperOf, waitingForChoice, libraryData, setDuplicates, setSelections, setLibraryData, showNotification, setIsScanning]);
 
   const resolveDuplicates = useCallback(async () => {
     if (selectedDuplicates.size === 0) {
       showNotification('error', 'Please select duplicates to resolve');
       return;
     }
+    if (waitingForChoice()) { return; }
 
     if (deleteFromDisk) {
       // Collect all file paths that will be removed so the modal can show them
@@ -290,7 +311,7 @@ export function useDuplicateResolution({
     }
 
     await executeResolve(false);
-  }, [selectedDuplicates, duplicates, deleteFromDisk, executeResolve, showNotification, keeperOf, setPendingDeletePaths]);
+  }, [selectedDuplicates, duplicates, deleteFromDisk, executeResolve, showNotification, keeperOf, waitingForChoice, setPendingDeletePaths]);
 
   return { resolveDuplicates, executeResolve, resolveInDatabase };
 }

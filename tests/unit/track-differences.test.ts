@@ -21,9 +21,15 @@ describe('trackDifferences', () => {
     expect(diff[3].values).toEqual({ a: '2', b: '0' });
   });
 
-  it('tells two sizes apart even when they read alike rounded', () => {
-    const copy = { ...aiff, id: 'b', size: aiff.size + 1200 };
-    expect(trackDifferences([aiff, copy]).map((d) => d.field)).toEqual(['size']);
+  it('compares a size as it is shown: a few kilobytes apart is no difference', () => {
+    expect(trackDifferences([aiff, { ...aiff, id: 'b', size: aiff.size + 1200 }])).toEqual([]);
+    expect(trackDifferences([aiff, { ...aiff, id: 'b', size: aiff.size * 2 }]).map((d) => d.field)).toEqual(['size']);
+  });
+
+  it('never compares when an entry was added — it says nothing about the file', () => {
+    expect(trackDifferences([
+      { ...aiff, dateAdded: '2026-04-05' }, { ...aiff, id: 'b', dateAdded: '2026-09-27' },
+    ])).toEqual([]);
   });
 
   it('treats a value only one copy has as a difference', () => {

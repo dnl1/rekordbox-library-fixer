@@ -15,6 +15,8 @@ import { useFileOperations } from '../hooks';
 import { ConfidenceBadge, PlayButton } from './ui';
 import { useSettingsStore } from '../stores/settingsStore';
 import { pickRecommendedTrack } from '../utils/pickRecommendedTrack';
+import { keeperOfSet } from '../utils/keeperOfSet';
+import { useKeeperChoiceStore } from '../stores/keeperChoiceStore';
 import { deletableFileCount, distinctFileCount } from '../utils/classifyDuplicateSet';
 import { normalizePathForCompare } from '../utils/normalizePath';
 import { streamingServiceOf, isStreamingTrack } from '../utils/streamingSource';
@@ -42,7 +44,6 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
   playlistMembership
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [revealProblem, setRevealProblem] = useState<string | null>(null);
 
   const match = useMemo(() => describeMatch(duplicate), [duplicate]);
@@ -53,12 +54,21 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
   const preferLossless = useSettingsStore((state) => state.scanOptions.preferLossless);
   const consolidateDestination = useSettingsStore((state) => state.consolidateDestination);
 
-  const recommendedTrack = useMemo(
+  const strategyPick = useMemo(
     () => pickRecommendedTrack(
       duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless, consolidateDestination
     ),
     [duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless, consolidateDestination]
   );
+  // The copy kept: the one chosen here, else the strategy's — the same rule the resolution follows.
+  const chosenId = useKeeperChoiceStore((s) => s.chosen[duplicate.id]);
+  const choose = useKeeperChoiceStore((s) => s.choose);
+  const clearChoice = useKeeperChoiceStore((s) => s.clear);
+  const recommendedTrack = useMemo(
+    () => keeperOfSet(duplicate.tracks, strategyPick, chosenId),
+    [duplicate.tracks, strategyPick, chosenId]
+  );
+  const isOwnChoice = !!chosenId && recommendedTrack?.id === chosenId;
 
 
   // Total playlist reach of this song across ALL its duplicate copies (the
@@ -122,8 +132,9 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
   }, []);
 
   const handleManualSelection = useCallback((trackId: string) => {
-    setSelectedTrackId(trackId);
-  }, []);
+    // Choosing the copy the strategy would keep anyway is no choice at all.
+    if (trackId === strategyPick?.id) { clearChoice(duplicate.id); } else { choose(duplicate.id, trackId); }
+  }, [choose, clearChoice, duplicate.id, strategyPick]);
 
   const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation(); // Prevent event bubbling
@@ -215,16 +226,13 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
       {isExpanded && (
         <div className="mt-3 space-y-2 te-expanded-content">
           {duplicate.tracks.map((track: any) => {
-            const isRecommended = recommendedTrack && track.id === recommendedTrack.id;
-            const isManuallySelected = resolutionStrategy === 'manual' && track.id === selectedTrackId;
+            const isRecommended = !!recommendedTrack && track.id === recommendedTrack.id;
 
             return (
               <div
                 key={track.id}
                 className={`p-3 bg-te-cream rounded-te border-2 ${
-                  isRecommended ? 'border-te-green-500' :
-                  isManuallySelected ? 'border-te-orange' :
-                  'border-te-grey-300'
+                  isRecommended ? 'border-te-green-500' : 'border-te-grey-300'
                 } transition-colors hover:border-te-grey-400`}
               >
                 <div className="flex items-start justify-between">
@@ -242,10 +250,15 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                           </span>
                         )}
                       </div>
-                      {resolutionStrategy !== 'manual' && (
+                      {!recommendedTrack ? (
+                        <span className="text-xs font-te-mono text-te-grey-500 whitespace-nowrap">Pick the copy to keep</span>
+                      ) : (
                         isRecommended ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-te-green-100 text-te-green-600 border border-te-green-200 font-te-mono whitespace-nowrap">
-                            <CheckCircle className="w-3 h-3" /> Will be kept
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-te-green-100 text-te-green-600 border border-te-green-200 font-te-mono whitespace-nowrap"
+                            title={isOwnChoice ? 'Your choice, over the strategy\'s recommendation' : 'Recommended by the resolution strategy'}
+                          >
+                            <CheckCircle className="w-3 h-3" /> Will be kept{isOwnChoice ? ' · your choice' : ''}
                           </span>
                         ) : isStreamingTrack(track.location) ? (
                           <span
@@ -269,11 +282,6 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                             Own file · trashed if enabled
                           </span>
                         )
-                      )}
-                      {resolutionStrategy === 'manual' && isManuallySelected && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-te-green-100 text-te-green-600 border border-te-green-200 font-te-mono whitespace-nowrap">
-                          <CheckCircle className="w-3 h-3" /> Will be kept
-                        </span>
                       )}
                     </div>
 
@@ -372,19 +380,23 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                     )}
                   </div>
 
-                  {resolutionStrategy === 'manual' && (
+                  {isRecommended ? (
+                    isOwnChoice && strategyPick && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); clearChoice(duplicate.id); }}
+                        className="ml-3 px-2 py-1 text-xs rounded-te whitespace-nowrap bg-te-grey-100 hover:bg-te-grey-200 text-te-grey-700 border border-te-grey-300"
+                        title="Go back to the copy the resolution strategy recommends"
+                      >
+                        Use recommended
+                      </button>
+                    )
+                  ) : (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleManualSelection(track.id);
-                      }}
-                      className={`ml-3 px-2 py-1 text-xs rounded-te transition-colors whitespace-nowrap ${
-                        isManuallySelected
-                          ? 'bg-te-orange text-te-cream border border-te-orange'
-                          : 'bg-te-grey-100 hover:bg-te-grey-200 text-te-grey-700 border border-te-grey-300'
-                      }`}
+                      onClick={(e) => { e.stopPropagation(); handleManualSelection(track.id); }}
+                      className="ml-3 px-2 py-1 text-xs rounded-te transition-colors whitespace-nowrap bg-te-grey-100 hover:bg-te-orange hover:text-te-cream text-te-grey-700 border border-te-grey-300"
+                      title="Keep this copy instead; the others are merged into it"
                     >
-                      {isManuallySelected ? 'Keeping this' : 'Keep this'}
+                      Keep this
                     </button>
                   )}
                 </div>
