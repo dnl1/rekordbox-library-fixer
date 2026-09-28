@@ -7,6 +7,7 @@ import {
   subscribeCleanup, getCleanupSnapshot, startCleanup, cancelCleanup, resetCleanupSession,
 } from '../../conversion/flacCleanupSession';
 import type { FlacCleanupPreview } from '../../../main/ipcContract';
+import { ActiveWorkers } from './shared';
 
 type Phase = 'idle' | 'previewing' | 'previewed' | 'confirming' | 'running' | 'done';
 
@@ -59,6 +60,7 @@ export const CleanupFlacPanel: React.FC = () => {
       tracks,
       libraryPath,
       dbKey: useSettingsStore.getState().rekordboxDbKey,
+      workers: useSettingsStore.getState().workers,
     });
     if (!res.success || !res.data) {
       showNotification('error', res.error ?? 'Cleanup failed', { important: true });
@@ -133,6 +135,7 @@ export const CleanupFlacPanel: React.FC = () => {
               <div className="w-full bg-te-grey-200 rounded-full h-2">
                 <div className="bg-te-orange h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
+              <div className="text-xs font-te-mono"><ActiveWorkers active={progress.active} /></div>
             </div>
           )}
 

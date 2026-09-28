@@ -2,7 +2,7 @@
 import type {
   IpcResult, RecoveredDbKey, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
   FlacCleanupPreview, FlacCleanupRequest, FlacCleanupProgress, FlacCleanupSummary,
-  AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary,
+  AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary, AutoHotCueProgress,
 } from '../../main/ipcContract';
 
 export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
@@ -260,6 +260,8 @@ declare global {
       // Auto hot cues
       autoHotCuePreview: (data: AutoHotCuePreviewRequest) => Promise<IpcResult<AutoHotCuePreview>>;
       autoHotCueWrite: (data: AutoHotCueWriteRequest) => Promise<IpcResult<AutoHotCueWriteSummary>>;
+      cancelAutoHotCue: (operationId: string) => Promise<{ success: boolean }>;
+      onAutoHotCueProgress: (callback: (progress: AutoHotCueProgress) => void) => () => void;
       // File Drop APIs
       handleNativeDrop: (filePaths: string[]) => Promise<{ success: boolean; data?: { filePaths: string[]; filePath?: string }; error?: string }>;
       onNativeFileDrop: (callback: (filePaths: string[]) => void) => () => void;

@@ -8,6 +8,7 @@ import {
   subscribeConversion, getConversionSnapshot, startConversion, cancelConversion, resetConversionSession,
 } from '../../conversion/convertFlacSession';
 import type { ConversionFormatPayload, ConvertFlacPreview } from '../../../main/ipcContract';
+import { ActiveWorkers } from './shared';
 
 type Phase = 'idle' | 'previewing' | 'previewed' | 'confirming' | 'running' | 'done';
 
@@ -101,6 +102,7 @@ export const ConvertFlacPanel: React.FC = () => {
       dbKey: isDatabase ? useSettingsStore.getState().rekordboxDbKey : undefined,
       format,
       trashOriginals: trashOriginals && isDatabase,
+      workers: useSettingsStore.getState().workers,
     });
 
     if (!res.success || !res.data) {
@@ -271,6 +273,7 @@ export const ConvertFlacPanel: React.FC = () => {
                 <span className="text-green-600">{progress.converted} converted</span>
                 <span className="text-te-grey-400">{progress.skipped} skipped</span>
                 {progress.failed > 0 && <span className="text-red-500">{progress.failed} failed</span>}
+                <ActiveWorkers active={progress.active} />
               </div>
             </div>
           )}

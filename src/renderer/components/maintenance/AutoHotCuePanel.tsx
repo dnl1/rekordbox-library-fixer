@@ -1,12 +1,16 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { CheckCircle, Play, Sparkles } from 'lucide-react';
+import React, { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { CheckCircle, Play, Sparkles, X } from 'lucide-react';
 import { useAppContext } from '../../AppWithRouter';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { playlistScopes } from '../../utils/playlistScopes';
 import { audioController } from '../../audio/audioController';
-import type { AutoHotCuePreview, AutoHotCueTrack } from '../../../main/ipcContract';
+import {
+  subscribeHotCues, getHotCueSnapshot, startHotCueSuggestions, cancelHotCueSuggestions, resetHotCueSession,
+} from '../../hotcues/autoHotCueSession';
+import type { AutoHotCueTrack } from '../../../main/ipcContract';
+import { ActiveWorkers } from './shared';
 
-type Phase = 'idle' | 'previewing' | 'previewed' | 'writing';
+type Phase = 'idle' | 'suggesting' | 'suggested' | 'writing';
 
 const LETTERS = 'ABCDEFGH';
 
@@ -19,22 +23,29 @@ export const formatCueTime = (ms: number): string => {
 };
 
 /**
- * Hot cues from rekordbox's own phrase analysis, for tracks that have none:
- * one per section — Intro, Up, Drop, Down, Outro — on A to H. Each track can
- * be listened to at its cues and unticked before anything is written. The
- * rules live in `src/main/autoHotCue.ts`; the write in `rekordboxDbHotCues.ts`.
+ * Hot cues from rekordbox's own phrase analysis and the drops in each track's
+ * bass, for tracks that have none: one per section — Intro, Up, Drop, Down,
+ * Outro — on A to H. Each track can be listened to at its cues and unticked
+ * before anything is written. The rules live in `src/main/autoHotCue.ts` and
+ * `bassDrops.ts`, the write in `rekordboxDbHotCues.ts`, the suggestion run —
+ * minutes long — in `autoHotCueSession`.
  */
 export const AutoHotCuePanel: React.FC = () => {
   const { libraryData, libraryPath, showNotification, onLoadLibrary } = useAppContext();
   const isDatabase = libraryPath.toLowerCase().endsWith('.db');
   const scopes = useMemo(() => playlistScopes(libraryData?.playlists ?? []), [libraryData]);
 
+  const session = useSyncExternalStore(subscribeHotCues, getHotCueSnapshot);
+  const mine = session.libraryPath === libraryPath;
   const [scopeKey, setScopeKey] = useState('');
   const [beatsBefore, setBeatsBefore] = useState(0);
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [preview, setPreview] = useState<AutoHotCuePreview | null>(null);
+  const [writing, setWriting] = useState(false);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+
+  const preview = mine && !session.running ? session.preview : null;
+  const progress = mine && session.running ? session.progress : null;
+  const error = mine && !session.running ? session.error : null;
+  const phase: Phase = writing ? 'writing' : mine && session.running ? 'suggesting' : preview ? 'suggested' : 'idle';
 
   const scope = scopes.find((s) => s.key === scopeKey);
   const chosen = useMemo(
@@ -42,25 +53,14 @@ export const AutoHotCuePanel: React.FC = () => {
     [preview, unticked]
   );
 
-  const reset = useCallback(() => { setPhase('idle'); setPreview(null); setUnticked(new Set()); setError(null); }, []);
+  const reset = useCallback(() => { resetHotCueSession(); setUnticked(new Set()); }, []);
 
   const runPreview = useCallback(async () => {
-    setPhase('previewing');
-    setError(null);
-    const res = await window.electronAPI.autoHotCuePreview({
-      libraryPath,
-      dbKey: useSettingsStore.getState().rekordboxDbKey,
-      scopeTrackIds: scope?.trackIds,
-      beatsBefore,
+    setUnticked(new Set());
+    const { rekordboxDbKey, workers } = useSettingsStore.getState();
+    await startHotCueSuggestions({
+      libraryPath, dbKey: rekordboxDbKey, scopeTrackIds: scope?.trackIds, beatsBefore, workers,
     });
-    if (res.success && res.data) {
-      setPreview(res.data);
-      setUnticked(new Set());
-      setPhase('previewed');
-    } else {
-      setError(res.error ?? 'Preview failed');
-      setPhase('idle');
-    }
   }, [libraryPath, scope, beatsBefore]);
 
   const runWrite = useCallback(async () => {
@@ -69,7 +69,7 @@ export const AutoHotCuePanel: React.FC = () => {
       showNotification('error', 'Close rekordbox first — the hot cues are written into its database.');
       return;
     }
-    setPhase('writing');
+    setWriting(true);
     const res = await window.electronAPI.autoHotCueWrite({
       libraryPath,
       dbKey: useSettingsStore.getState().rekordboxDbKey,
@@ -78,8 +78,8 @@ export const AutoHotCuePanel: React.FC = () => {
         cues: t.cues.map(({ kind, name, ms }) => ({ kind, name, ms })),
       })),
     });
+    setWriting(false);
     if (!res.success || !res.data) {
-      setPhase('previewed');
       showNotification('error', res.error ?? 'The hot cues could not be written', { important: true });
       return;
     }
@@ -129,7 +129,7 @@ export const AutoHotCuePanel: React.FC = () => {
               <select
                 id="hotcue-scope"
                 value={scopeKey}
-                disabled={phase === 'writing'}
+                disabled={phase === 'writing' || phase === 'suggesting'}
                 onChange={(e) => { setScopeKey(e.target.value); reset(); }}
                 className="w-full border border-te-grey-300 rounded-te px-3 py-2 text-sm font-te-mono bg-te-cream focus:outline-none focus:border-te-orange"
               >
@@ -144,7 +144,7 @@ export const AutoHotCuePanel: React.FC = () => {
               <select
                 id="hotcue-offset"
                 value={beatsBefore}
-                disabled={phase === 'writing'}
+                disabled={phase === 'writing' || phase === 'suggesting'}
                 onChange={(e) => { setBeatsBefore(Number(e.target.value)); reset(); }}
                 className="w-full border border-te-grey-300 rounded-te px-3 py-2 text-sm font-te-mono bg-te-cream focus:outline-none focus:border-te-orange"
               >
@@ -168,6 +168,28 @@ export const AutoHotCuePanel: React.FC = () => {
                   {preview.notAnalysed} have no phrase analysis or beatgrid — analyse them in rekordbox first
                 </div>
               )}
+              {preview.withoutDrops > 0 && (
+                <div className="text-amber-600">
+                  {preview.withoutDrops} could not be listened to for drops — their cues follow the phrases alone
+                </div>
+              )}
+              {preview.cancelled && <div className="text-amber-600">Stopped early — only the tracks done so far</div>}
+            </div>
+          )}
+
+          {phase === 'suggesting' && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-te-grey-500 font-te-mono">
+                <span className="truncate max-w-xs">Listening for drops{progress ? ` — ${progress.currentFile}` : '…'}</span>
+                {progress && <span>{progress.current} / {progress.total}</span>}
+              </div>
+              <div className="w-full bg-te-grey-200 rounded-full h-2">
+                <div
+                  className="bg-te-orange h-2 rounded-full transition-all"
+                  style={{ width: `${progress && progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%` }}
+                />
+              </div>
+              {progress && <div className="text-xs font-te-mono"><ActiveWorkers active={progress.active} /></div>}
             </div>
           )}
 
@@ -204,7 +226,7 @@ export const AutoHotCuePanel: React.FC = () => {
             </ul>
           )}
 
-          {phase === 'previewed' && chosen.length > 0 && (
+          {phase === 'suggested' && chosen.length > 0 && (
             <p className="text-xs font-te-mono text-te-grey-700">
               Writes the cues into the rekordbox database, so rekordbox must be closed. Each track is checked
               again first, and one that got a hot cue meanwhile is left alone. A backup is saved first, and you
@@ -215,13 +237,19 @@ export const AutoHotCuePanel: React.FC = () => {
           {error && <div className="text-sm text-red-500 font-te-mono">{error}</div>}
 
           <div className="flex gap-3 pt-1">
-            <button
-              onClick={() => { void runPreview(); }}
-              disabled={phase === 'previewing' || phase === 'writing'}
-              className="btn-secondary flex items-center gap-2 disabled:opacity-40"
-            >
-              <Sparkles className="w-4 h-4" /> {phase === 'previewing' ? 'Reading the analysis…' : 'Suggest hot cues'}
-            </button>
+            {phase === 'suggesting' ? (
+              <button onClick={() => { void cancelHotCueSuggestions(); }} className="btn-secondary flex items-center gap-2">
+                <X className="w-4 h-4" /> Cancel
+              </button>
+            ) : (
+              <button
+                onClick={() => { void runPreview(); }}
+                disabled={phase === 'writing'}
+                className="btn-secondary flex items-center gap-2 disabled:opacity-40"
+              >
+                <Sparkles className="w-4 h-4" /> Suggest hot cues
+              </button>
+            )}
             {preview && chosen.length > 0 && (
               <button
                 onClick={() => { void runWrite(); }}

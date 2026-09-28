@@ -264,6 +264,17 @@ describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
     expect(result.skipped[0].reason).toMatch(/not this recording \(the audio differs\)/);
   });
 
+  it('converts several files at once, reporting how many workers are busy', async () => {
+    const copies = ['One', 'Two', 'Three'].map((n) => { const f = path.join(dir, `${n}.flac`); fs.copyFileSync(flac, f); return f; });
+    const plan = planConversions(copies.map((location, i) => ({ id: `p${i}`, location })), 'wav');
+    const active: number[] = [];
+    const result = await new FlacConverter(ffmpeg!).convert(plan, 'wav', (p) => active.push(p.active), { cancelled: false }, 3);
+    expect(result.failed).toEqual([]);
+    expect(result.converted).toHaveLength(3);
+    expect(Math.max(...active)).toBe(3);
+    expect(active[active.length - 1]).toBe(0);
+  });
+
   it('stops without leaving a partial file when cancelled', async () => {
     const plan = planConversions([{ id: 't1', location: flac }], 'aiff', (p) => p === flac);
     plan.jobs[0].destination = path.join(dir, 'cancelled.aiff');

@@ -84,11 +84,7 @@ describe('parseAnalysis', () => {
 
 describe('phraseName', () => {
   it('names phrases by mood, as rekordbox shows them', () => {
-    expect([1, 2, 3, 5, 6].map((k) => phraseName(1, k))).toEqual(['Intro', 'Up', 'Down', 'Drop', 'Outro']);
-  });
-
-  it('calls a high-mood chorus a drop, and keeps a song\'s chorus a chorus', () => {
-    expect(phraseName(1, 5)).toBe('Drop');
+    expect([1, 2, 3, 5, 6].map((k) => phraseName(1, k))).toEqual(['Intro', 'Up', 'Down', 'Chorus', 'Outro']);
     expect(phraseName(2, 9)).toBe('Chorus');
     expect(phraseName(3, 4)).toBe('Verse 1');
     expect(phraseName(1, 4)).toBeNull();
@@ -113,7 +109,7 @@ describe('suggestHotCues', () => {
     expect(cues).toEqual([
       { slot: 0, kind: 1, name: 'Intro', ms: at(1) },
       { slot: 1, kind: 2, name: 'Up', ms: at(33) },
-      { slot: 2, kind: 3, name: 'Drop', ms: at(65) },
+      { slot: 2, kind: 3, name: 'Chorus', ms: at(65) },
       { slot: 3, kind: 5, name: 'Down', ms: at(97) },
       { slot: 4, kind: 6, name: 'Outro', ms: at(129) },
     ]);
@@ -121,7 +117,7 @@ describe('suggestHotCues', () => {
 
   it('counts a run of phrases of one kind as one section', () => {
     const cues = suggestHotCues(grid, analysis([[1, 1], [33, 5], [65, 5], [97, 5], [129, 3]]), { beatsBefore: 0 });
-    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Drop', 'Down']);
+    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Chorus', 'Down']);
   });
 
   it('places a cue a bar early when asked, but never before the first beat', () => {
@@ -129,13 +125,27 @@ describe('suggestHotCues', () => {
     expect(cues.map((c) => c.ms)).toEqual([at(1), at(29)]);
   });
 
-  it('with more than eight sections keeps intro, outro, drops and breakdowns before build-ups', () => {
-    // Intro, then Up/Chorus/Down three times, then Outro: eleven sections.
+  it('names a section a drop starts Drop, and leaves a chorus the bass was already in a Chorus', () => {
+    const cues = suggestHotCues(grid, analysis([[1, 1], [33, 5], [65, 3], [97, 5]]), { beatsBefore: 0, drops: [99] });
+    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Chorus', 'Down', 'Drop']);
+    expect(cues[3].ms).toBe(at(97));
+  });
+
+  it('starts a section at a drop that falls inside one', () => {
+    const cues = suggestHotCues(grid, analysis([[1, 1], [33, 2], [129, 6]]), { beatsBefore: 0, drops: [81] });
+    expect(cues.map((c) => [c.name, c.ms])).toEqual([['Intro', at(1)], ['Up', at(33)], ['Drop', at(81)], ['Outro', at(129)]]);
+  });
+
+  it('with more than eight sections keeps intro, outro, drops and breakdowns before choruses and build-ups', () => {
+    // Intro, then Up/Chorus/Down three times, then Outro: eleven sections; the bass drops into every chorus.
     const phrases: Array<[number, number]> = [[1, 1]];
+    const drops: number[] = [];
     let beat = 17;
-    for (let i = 0; i < 3; i++) { for (const kind of [2, 5, 3]) { phrases.push([beat, kind]); beat += 32; } }
+    for (let i = 0; i < 3; i++) {
+      for (const kind of [2, 5, 3]) { phrases.push([beat, kind]); if (kind === 5) { drops.push(beat); } beat += 32; }
+    }
     phrases.push([beat, 6]);
-    const cues = suggestHotCues(grid, analysis(phrases), { beatsBefore: 0 });
+    const cues = suggestHotCues(grid, analysis(phrases), { beatsBefore: 0, drops });
     expect(cues).toHaveLength(8);
     expect(cues.map((c) => c.name)).toEqual(['Intro', 'Drop', 'Down', 'Drop', 'Down', 'Drop', 'Down', 'Outro']);
     expect(cues.map((c) => c.kind)).toEqual([1, 2, 3, 5, 6, 7, 8, 9]);

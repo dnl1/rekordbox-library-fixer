@@ -132,11 +132,19 @@ collection has to go through the database.
   hot cue at all (memory cues do not count and are kept). `anlzReader` reads `PQTZ` and `PSSI` out of the ANLZ
   files, unmasking `PSSI`; checked identical to pyrekordbox on a real library, and it reads nine files pyrekordbox
   cannot. One cue per section (a run of phrases of one kind), on the phrase or a bar before, named after it, A–H in
-  time order — a high-mood "Chorus" is named Drop, a mid/low one stays Chorus; with more than eight sections, intro and outro first, then drops and breakdowns, build-ups and verses
+  time order. A section is named Drop only when the bass says so (`bassDrops.ts`): the bundled ffmpeg low-passes
+  each track at 120 Hz, levels are measured per bar along rekordbox's grid, and a drop is the bass back in full for
+  two bars after at least eight held down — tuned on a real psy library, where most of rekordbox's "Chorus" phrases
+  are not drops and a drop can fall inside an "Up". With more than eight sections,
+  intro and outro first, then drops and breakdowns, then choruses, build-ups and verses
   last — keeping the first eight left most tracks with nothing cued in their second half. A grid that is not
   strictly increasing is refused (a real library has one that jumps back). The write re-checks each track still has
   no hot cue, with rekordbox closed and a backup first. No colours yet: how `Color`/`ColorTableIndex` map to
   rekordbox's hot cue palette is not verified, so cues are written uncoloured (`Color` -1).
+- **Workers** (`src/main/workerPool.ts`, `components/maintenance/WorkersPanel.tsx`): Convert FLAC, Clean up converted
+  FLACs and Auto hot cues work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
+  `runPool` reports how many are busy, and every run's progress shows it. On a real library, 1332 tracks' bass
+  analysis took 6.5 minutes with four.
 - **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),
   which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
   `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's

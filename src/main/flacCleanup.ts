@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isStreamingLocation } from './brokenEntries';
 import type { CancelToken } from './flacConverter';
+import { runPool } from './workerPool';
 
 /**
  * Find the FLACs a conversion already replaced, and put them in the trash.
@@ -91,6 +92,8 @@ export function planFlacCleanup(
 export interface CleanupProgress {
   current: number;
   total: number;
+  /** Workers busy right now. */
+  active: number;
   currentFile: string;
 }
 
@@ -130,29 +133,37 @@ export async function cleanupFlacs(
   plan: CleanupPlan,
   deps: CleanupDeps,
   onProgress: (p: CleanupProgress) => void,
-  cancelToken: CancelToken
+  cancelToken: CancelToken,
+  workers = 1
 ): Promise<CleanupOutcome> {
   const outcome: CleanupOutcome = { trashed: [], freedBytes: 0, kept: [], failed: [], cancelled: false };
-  const proved: CleanupCandidate[] = [];
   const total = plan.candidates.length;
+  let started = 0;
+  let active = 0;
+  let currentFile = '';
+  const report = () => onProgress({ current: started, total, active, currentFile });
 
-  for (let i = 0; i < total; i++) {
-    if (cancelToken.cancelled) { outcome.cancelled = true; return outcome; }
-    const candidate = plan.candidates[i];
-    onProgress({ current: i + 1, total, currentFile: path.basename(candidate.flac) });
+  // The comparisons run `workers` at a time; the trashing below stays one by one.
+  const verdicts = await runPool(plan.candidates, workers, async (candidate) => {
+    started++;
+    currentFile = path.basename(candidate.flac);
+    report();
     try {
       const problem = await deps.sameAudio(candidate.flac, candidate.converted, cancelToken);
       if (problem) {
         outcome.kept.push({ file: candidate.flac, reason: `not the same audio as ${path.basename(candidate.converted)} (${problem})` });
-      } else {
-        proved.push(candidate);
+        return false;
       }
+      return true;
     } catch (error) {
-      if (cancelToken.cancelled) { outcome.cancelled = true; return outcome; }
-      outcome.failed.push({ file: candidate.flac, error: error instanceof Error ? error.message : String(error) });
+      if (!cancelToken.cancelled) {
+        outcome.failed.push({ file: candidate.flac, error: error instanceof Error ? error.message : String(error) });
+      }
+      return false;
     }
-  }
+  }, cancelToken, (n) => { active = n; if (started > 0) { report(); } });
   if (cancelToken.cancelled) { outcome.cancelled = true; return outcome; }
+  const proved = plan.candidates.filter((_, i) => verdicts[i] === true);
   if (proved.length === 0) { return outcome; }
 
   const now = new Set((await deps.currentLocations()).map(pathKey));

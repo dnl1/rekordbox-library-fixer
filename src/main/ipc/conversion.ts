@@ -104,7 +104,7 @@ export function registerConversionIpc(): void {
   });
 
   ipcMain.handle('convert-flac', async (event, request: ConvertFlacRequest): Promise<IpcResult<ConvertFlacSummary>> => {
-    const { operationId, tracks: allTracks, scopeTrackIds, libraryPath, dbKey, format, trashOriginals } = request;
+    const { operationId, tracks: allTracks, scopeTrackIds, libraryPath, dbKey, format, trashOriginals, workers } = request;
     const tracks = inScope(allTracks, scopeTrackIds);
     const ffmpeg = ffmpegPath();
     if (!ffmpeg) {
@@ -136,7 +136,8 @@ export function registerConversionIpc(): void {
         plan,
         format,
         (progress) => { event.sender.send('convert-flac-progress', { operationId, ...progress }); },
-        cancelToken
+        cancelToken,
+        workers
       );
 
       // A cancelled run still writes what it finished: those files are
@@ -269,7 +270,7 @@ function registerFlacCleanupIpc(): void {
   });
 
   ipcMain.handle('cleanup-flac', async (event, request: FlacCleanupRequest): Promise<IpcResult<FlacCleanupSummary>> => {
-    const { operationId, tracks, libraryPath, dbKey } = request;
+    const { operationId, tracks, libraryPath, dbKey, workers } = request;
     const ffmpeg = ffmpegPath();
     if (!ffmpeg) {
       return { success: false, error: 'This build of the app has no ffmpeg for this platform, so it cannot compare the audio.' };
@@ -295,7 +296,8 @@ function registerFlacCleanupIpc(): void {
           trash: (file) => shell.trashItem(file),
         },
         (progress) => { event.sender.send('cleanup-flac-progress', { operationId, ...progress }); },
-        cancelToken
+        cancelToken,
+        workers
       );
       return { success: true, data: outcome };
     } catch (error) {

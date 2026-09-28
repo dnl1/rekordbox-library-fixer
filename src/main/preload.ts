@@ -3,7 +3,7 @@ import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
   ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
-  AutoHotCuePreviewRequest, AutoHotCueWriteRequest,
+  AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -174,6 +174,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Auto hot cues from rekordbox's phrase analysis
   autoHotCuePreview: (data: AutoHotCuePreviewRequest) => ipcRenderer.invoke('auto-hot-cue-preview', data),
   autoHotCueWrite: (data: AutoHotCueWriteRequest) => ipcRenderer.invoke('auto-hot-cue-write', data),
+  cancelAutoHotCue: (operationId: string) => ipcRenderer.invoke('cancel-auto-hot-cue', operationId),
+  onAutoHotCueProgress: (callback: (progress: AutoHotCueProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: AutoHotCueProgress) => callback(progress);
+    ipcRenderer.on('auto-hot-cue-progress', handler);
+    return () => { ipcRenderer.removeListener('auto-hot-cue-progress', handler); };
+  },
 
   // Native drag-and-drop
   handleNativeDrop: (filePaths: string[]) => ipcRenderer.invoke('handle-native-drop', filePaths),

@@ -194,12 +194,16 @@ export interface ConvertFlacRequest {
    * database still points at the FLACs.
    */
   trashOriginals: boolean;
+  /** How many files are converted at once. */
+  workers?: number;
 }
 
 export interface ConvertFlacProgress {
   operationId: string;
   current: number;
   total: number;
+  /** Workers busy right now. */
+  active: number;
   currentFile: string;
   converted: number;
   skipped: number;
@@ -235,12 +239,16 @@ export interface FlacCleanupRequest {
   /** A master.db only: an XML library says nothing about what rekordbox itself uses. */
   libraryPath: string;
   dbKey: string;
+  /** How many FLACs are compared with their conversion at once. */
+  workers?: number;
 }
 
 export interface FlacCleanupProgress {
   operationId: string;
   current: number;
   total: number;
+  /** Workers busy right now. */
+  active: number;
   currentFile: string;
 }
 
@@ -272,12 +280,24 @@ export interface AutoHotCueTrack {
 }
 
 export interface AutoHotCuePreviewRequest {
+  operationId: string;
   libraryPath: string;
   dbKey: string;
   /** Limit to a playlist or folder. Absent means the whole collection. */
   scopeTrackIds?: string[];
   /** 0 puts each cue on its phrase, 4 a bar before it. */
   beatsBefore: number;
+  /** How many tracks' audio is analysed at once. */
+  workers: number;
+}
+
+export interface AutoHotCueProgress {
+  operationId: string;
+  current: number;
+  total: number;
+  /** Workers busy right now. */
+  active: number;
+  currentFile: string;
 }
 
 export interface AutoHotCuePreview {
@@ -286,6 +306,9 @@ export interface AutoHotCuePreview {
   alreadyCued: number;
   /** Left out: no phrase analysis, or no beatgrid to place cues on — analyse them in rekordbox. */
   notAnalysed: number;
+  /** Cued from the phrases alone: the audio could not be read for drops, or this build has no ffmpeg. */
+  withoutDrops: number;
+  cancelled: boolean;
 }
 
 export interface AutoHotCueWriteRequest {

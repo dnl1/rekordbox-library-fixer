@@ -55,3 +55,13 @@ export const QualityInfo: React.FC = () => {
   );
 };
 
+
+/**
+ * How many workers are busy in a run — the number set under Performance, or
+ * fewer as the last files finish. Shown on every run that uses them.
+ */
+export const ActiveWorkers: React.FC<{ active: number }> = ({ active }) => (
+  <span className="text-te-grey-500" aria-label={`${active} workers in progress`}>
+    {active} worker{active === 1 ? '' : 's'} in progress
+  </span>
+);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ScanOptions, ResolutionStrategy, RelocationOptions } from '../types';
+import { clampWorkers, DEFAULT_WORKERS } from '../../main/workerPool';
 
 interface SettingsState {
   // Settings
@@ -14,12 +15,15 @@ interface SettingsState {
    * duplicates keeps the copy in this folder over any other.
    */
   consolidateDestination: string;
+  /** How many files the Maintenance tools work on at once — conversion, cleanup, audio analysis. */
+  workers: number;
 
   // Actions
   setScanOptions: (options: ScanOptions) => void;
   setResolutionStrategy: (strategy: ResolutionStrategy) => void;
   setRekordboxDbKey: (key: string) => void;
   setConsolidateDestination: (folder: string) => void;
+  setWorkers: (workers: number) => void;
   updateScanOption: <K extends keyof ScanOptions>(key: K, value: ScanOptions[K]) => void;
   addPathPreference: (path: string) => void;
   removePathPreference: (index: number) => void;
@@ -45,6 +49,7 @@ export const useSettingsStore = create<SettingsState>()(
       resolutionStrategy: 'keep-highest-quality',
       rekordboxDbKey: '',
       consolidateDestination: '',
+      workers: DEFAULT_WORKERS,
       relocationOptions: {
         searchPaths: [],
         searchDepth: 8,
@@ -67,6 +72,8 @@ export const useSettingsStore = create<SettingsState>()(
       setRekordboxDbKey: (key) => set({ rekordboxDbKey: key }),
 
       setConsolidateDestination: (folder) => set({ consolidateDestination: folder }),
+
+      setWorkers: (workers) => set({ workers: clampWorkers(workers) }),
 
       updateScanOption: (key, value) => {
         console.log(`🔧 Zustand: Updating scan option ${key}:`, value);

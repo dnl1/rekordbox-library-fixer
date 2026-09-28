@@ -8,6 +8,7 @@ import { FilterMovePanel } from '../maintenance/FilterMovePanel';
 import { ConvertFlacPanel } from '../maintenance/ConvertFlacPanel';
 import { CleanupFlacPanel } from '../maintenance/CleanupFlacPanel';
 import { AutoHotCuePanel } from '../maintenance/AutoHotCuePanel';
+import { WorkersPanel } from '../maintenance/WorkersPanel';
 
 /**
  * Independent tools, each owning its own state: clearing out entries that can
@@ -31,6 +32,7 @@ export const MaintenancePage: React.FC = () => {
         <BrokenEntriesPanel />
       </div>
 
+      <WorkersPanel />
       <ConvertFlacPanel />
       <CleanupFlacPanel />
       <AutoHotCuePanel />

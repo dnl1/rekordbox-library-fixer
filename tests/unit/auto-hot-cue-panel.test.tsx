@@ -11,6 +11,7 @@ const context = {
 vi.mock('../../src/renderer/AppWithRouter', () => ({ useAppContext: () => context }));
 
 import { AutoHotCuePanel, formatCueTime } from '../../src/renderer/components/maintenance/AutoHotCuePanel';
+import { resetHotCueSession } from '../../src/renderer/hotcues/autoHotCueSession';
 
 const api = () => (window as any).electronAPI;
 
@@ -20,14 +21,17 @@ const track = (id: string, title: string) => ({
 });
 
 beforeEach(() => {
+  resetHotCueSession();
   context.libraryData = { tracks: new Map(), playlists: [] };
   context.libraryPath = '/pioneer/master.db';
   context.showNotification.mockReset();
   context.onLoadLibrary.mockReset();
   api().isRekordboxRunning = vi.fn(async () => ({ running: false }));
+  api().onAutoHotCueProgress = vi.fn(() => () => undefined);
+  api().cancelAutoHotCue = vi.fn(async () => ({ success: true }));
   api().autoHotCuePreview = vi.fn(async () => ({
     success: true,
-    data: { tracks: [track('t1', 'First'), track('t2', 'Second')], alreadyCued: 33, notAnalysed: 40 },
+    data: { tracks: [track('t1', 'First'), track('t2', 'Second')], alreadyCued: 33, notAnalysed: 40, withoutDrops: 0, cancelled: false },
   }));
   api().autoHotCueWrite = vi.fn(async () => ({
     success: true, data: { tracksWritten: 1, cuesWritten: 2, skipped: [], backupPath: '/b' },
@@ -64,6 +68,32 @@ describe('AutoHotCuePanel', () => {
     fireEvent.change(screen.getByLabelText(/Place each cue/), { target: { value: '4' } });
     fireEvent.click(screen.getByRole('button', { name: /Suggest hot cues/ }));
     await waitFor(() => expect(api().autoHotCuePreview).toHaveBeenCalledWith(expect.objectContaining({ beatsBefore: 4 })));
+  });
+
+  it('analyses with the number of workers set in Performance', async () => {
+    const { useSettingsStore } = await import('../../src/renderer/stores/settingsStore');
+    useSettingsStore.getState().setWorkers(6);
+    render(<AutoHotCuePanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Suggest hot cues/ }));
+    await waitFor(() => expect(api().autoHotCuePreview).toHaveBeenCalledWith(expect.objectContaining({ workers: 6 })));
+  });
+
+  it('shows progress and busy workers, and offers to cancel while it listens for drops', async () => {
+    let finish: (v: unknown) => void = () => {};
+    let push: (p: unknown) => void = () => {};
+    api().onAutoHotCueProgress = vi.fn((cb: (p: unknown) => void) => { push = cb; return () => undefined; });
+    api().autoHotCuePreview = vi.fn((req: { operationId: string }) => {
+      setTimeout(() => push({ operationId: req.operationId, current: 3, total: 10, active: 4, currentFile: 'Nostalgia' }), 0);
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    render(<AutoHotCuePanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Suggest hot cues/ }));
+    await waitFor(() => expect(screen.getByText('4 workers in progress')).toBeTruthy());
+    expect(screen.getByText('3 / 10')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/ }));
+    expect(api().cancelAutoHotCue).toHaveBeenCalled();
+    finish({ success: true, data: { tracks: [], alreadyCued: 0, notAnalysed: 0, withoutDrops: 0, cancelled: true } });
+    await waitFor(() => expect(screen.getByText(/Stopped early/)).toBeTruthy());
   });
 
   it('writes only the tracks left ticked, then reopens the library', async () => {

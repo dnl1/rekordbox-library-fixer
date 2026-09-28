@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IAudioMetadata, IOptions } from 'music-metadata';
 import { isStreamingLocation } from './brokenEntries';
+import { runPool } from './workerPool';
 
 /**
  * Convert FLAC files to AIFF, WAV or MP3 with the bundled ffmpeg.
@@ -97,6 +98,8 @@ export interface ConversionResult {
 export interface ConversionProgress {
   current: number;
   total: number;
+  /** Workers busy right now. */
+  active: number;
   currentFile: string;
   converted: number;
   skipped: number;
@@ -386,8 +389,8 @@ export class FlacConverter {
   constructor(private readonly ffmpegPath: string) {}
 
   /**
-   * Convert every job in turn. The original is never touched here: whether it
-   * goes is decided only after the library points at the new file.
+   * Convert every job, `workers` at a time. The original is never touched
+   * here: whether it goes is decided only after the library points at the new file.
    *
    * Each file is written under a temporary name and renamed once it has been
    * checked, so a crash, a full disk or a cancel never leaves something with
@@ -397,89 +400,105 @@ export class FlacConverter {
     plan: ConversionPlan,
     format: ConversionFormat,
     onProgress: (p: ConversionProgress) => void,
-    cancelToken: CancelToken
+    cancelToken: CancelToken,
+    workers = 1
   ): Promise<ConversionResult> {
     const result: ConversionResult = { converted: [], skipped: [...plan.skipped], failed: [], cancelled: false };
     const total = plan.jobs.length;
+    let started = 0;
+    let active = 0;
+    let currentFile = '';
+    const report = () => onProgress({
+      current: started, total, active, currentFile,
+      converted: result.converted.length,
+      skipped: result.skipped.length,
+      failed: result.failed.length,
+    });
 
-    for (let i = 0; i < total; i++) {
-      if (cancelToken.cancelled) { result.cancelled = true; break; }
-      const job = plan.jobs[i];
-      onProgress({
-        current: i + 1, total,
-        currentFile: path.basename(job.source),
-        converted: result.converted.length,
-        skipped: result.skipped.length,
-        failed: result.failed.length,
-      });
+    // Several files at once, each its own ffmpeg; every one still goes through
+    // the same temporary name, check and rename on its own.
+    await runPool(plan.jobs, workers, async (job) => {
+      if (cancelToken.cancelled) { return; }
+      started++;
+      currentFile = path.basename(job.source);
+      report();
+      await this.convertJob(job, format, result, cancelToken);
+    }, cancelToken, (n) => { active = n; if (started > 0) { report(); } });
 
-      const temp = `${job.destination}.part`;
-      try {
-        const source = await probeAudio(job.source);
-        const shape = outputShape(format, source);
+    if (cancelToken.cancelled) { result.cancelled = true; }
+    return result;
+  }
 
-        // Checked again here: the plan may be minutes old by the time its turn comes.
-        if (fs.existsSync(job.destination) && isLosslessFormat(format)) {
-          const problem = await this.provesIdentical(job.source, job.destination, source, shape, format, cancelToken);
-          if (problem) {
-            for (const trackId of job.trackIds) {
-              result.skipped.push({
-                trackId, location: job.source, kind: 'exists',
-                reason: `${path.basename(job.destination)} is already there and is not this recording (${problem}) — it is left alone`,
-              });
-            }
-          } else {
-            result.converted.push({
-              trackIds: job.trackIds,
-              oldLocation: job.source,
-              newLocation: job.destination,
-              format,
-              size: fs.statSync(job.destination).size,
-              sampleRate: shape.sampleRate,
-              bitDepth: shape.bits,
-              bitRate: shape.bitRate,
-              adopted: true,
-            });
-          }
-          continue;
-        }
-        if (fs.existsSync(job.destination)) {
+  private async convertJob(
+    job: ConversionJob,
+    format: ConversionFormat,
+    result: ConversionResult,
+    cancelToken: CancelToken
+  ): Promise<void> {
+    const temp = `${job.destination}.part`;
+    try {
+      const source = await probeAudio(job.source);
+      const shape = outputShape(format, source);
+
+      // Checked again here: the plan may be minutes old by the time its turn comes.
+      if (fs.existsSync(job.destination) && isLosslessFormat(format)) {
+        const problem = await this.provesIdentical(job.source, job.destination, source, shape, format, cancelToken);
+        if (problem) {
           for (const trackId of job.trackIds) {
             result.skipped.push({
               trackId, location: job.source, kind: 'exists',
-              reason: `${path.basename(job.destination)} is already there — it is left alone`,
+              reason: `${path.basename(job.destination)} is already there and is not this recording (${problem}) — it is left alone`,
             });
           }
-          continue;
+        } else {
+          result.converted.push({
+            trackIds: job.trackIds,
+            oldLocation: job.source,
+            newLocation: job.destination,
+            format,
+            size: fs.statSync(job.destination).size,
+            sampleRate: shape.sampleRate,
+            bitDepth: shape.bits,
+            bitRate: shape.bitRate,
+            adopted: true,
+          });
         }
-
-        fs.rmSync(temp, { force: true });
-        await this.run(ffmpegArgs(job.source, temp, format, shape, source.sampleRate), cancelToken);
-        if (format === 'wav') { patchWavFile(temp); }
-
-        const output = await probeAudio(temp);
-        const problem = verifyConversion(source, output, shape, format);
-        if (problem) { throw new Error(`the converted file failed its check: ${problem}`); }
-
-        fs.renameSync(temp, job.destination);
-        result.converted.push({
-          trackIds: job.trackIds,
-          oldLocation: job.source,
-          newLocation: job.destination,
-          format,
-          size: fs.statSync(job.destination).size,
-          sampleRate: shape.sampleRate,
-          bitDepth: shape.bits,
-          bitRate: shape.bitRate,
-        });
-      } catch (error) {
-        fs.rmSync(temp, { force: true });
-        if (cancelToken.cancelled) { result.cancelled = true; break; }
-        result.failed.push({ file: job.source, error: error instanceof Error ? error.message : String(error) });
+        return;
       }
-    }
+      if (fs.existsSync(job.destination)) {
+        for (const trackId of job.trackIds) {
+          result.skipped.push({
+            trackId, location: job.source, kind: 'exists',
+            reason: `${path.basename(job.destination)} is already there — it is left alone`,
+          });
+        }
+        return;
+      }
 
-    return result;
+      fs.rmSync(temp, { force: true });
+      await this.run(ffmpegArgs(job.source, temp, format, shape, source.sampleRate), cancelToken);
+      if (format === 'wav') { patchWavFile(temp); }
+
+      const output = await probeAudio(temp);
+      const problem = verifyConversion(source, output, shape, format);
+      if (problem) { throw new Error(`the converted file failed its check: ${problem}`); }
+
+      fs.renameSync(temp, job.destination);
+      result.converted.push({
+        trackIds: job.trackIds,
+        oldLocation: job.source,
+        newLocation: job.destination,
+        format,
+        size: fs.statSync(job.destination).size,
+        sampleRate: shape.sampleRate,
+        bitDepth: shape.bits,
+        bitRate: shape.bitRate,
+      });
+    } catch (error) {
+      fs.rmSync(temp, { force: true });
+      if (cancelToken.cancelled) { return; }
+      result.failed.push({ file: job.source, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   /**
