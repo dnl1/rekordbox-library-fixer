@@ -45,8 +45,9 @@ export const QualityInfo: React.FC = () => {
           onMouseLeave={() => setOpen(false)}
         >
           <div className="font-semibold text-te-grey-800 mb-1">Quality scoring</div>
-          <div><span className="text-green-600 font-semibold">WAV / AIFF</span> — always top tier</div>
-          <div><span className="text-blue-600 font-semibold">FLAC</span> — top tier only when "Prefer FLAC" is on</div>
+          <div><span className="text-green-600 font-semibold">AIFF</span> — top tier: lossless, keeps tags and artwork</div>
+          <div><span className="text-green-600 font-semibold">WAV</span> — next, just below AIFF</div>
+          <div><span className="text-blue-600 font-semibold">FLAC</span> — level with WAV only when "Prefer FLAC" is on</div>
           <div><span className="text-te-grey-500 font-semibold">MP3 / AAC / OGG</span> — scored by bitrate &amp; size</div>
         </div>
       )}

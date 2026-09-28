@@ -20,6 +20,29 @@ export function isFlac(location: string): boolean {
   return ext(location) === '.flac';
 }
 
+/** AIFF: lossless, universally supported, and carries tags and artwork. */
+export function isAiff(location: string): boolean {
+  return ['.aiff', '.aif'].includes(ext(location));
+}
+
+/**
+ * How a file ranks before bitrate and size are looked at — higher wins.
+ *
+ * AIFF sits above WAV: both are lossless and play on every CDJ, but WAV keeps
+ * almost no tags or artwork, so of two lossless copies the AIFF is the one worth
+ * keeping. FLAC joins WAV only when the user opts in, since older players
+ * cannot read it. Lossy formats are left to bitrate and size.
+ *
+ * Kept free of Node imports: the renderer's duplicate badge uses it too, so the
+ * copy it marks is the copy the main process would keep.
+ */
+export function qualityTier(location: string, preferFlac = false): number {
+  if (isAiff(location)) { return 3; }
+  if (isUniversalLossless(location)) { return 2; }
+  if (preferFlac && isFlac(location)) { return 2; }
+  return 0;
+}
+
 /** Returns `true` for any lossless format (FLAC, WAV, AIFF). */
 export function isLossless(location: string): boolean {
   return LOSSLESS_EXTENSIONS.includes(ext(location));

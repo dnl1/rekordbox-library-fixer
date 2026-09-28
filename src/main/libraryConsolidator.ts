@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Track } from './rekordboxParser';
-import { isUniversalLossless, isFlac } from './audioQuality';
+import { qualityTier } from './audioQuality';
 
 export interface ConsolidateOptions {
   destination: string;
@@ -63,9 +63,8 @@ export class LibraryConsolidator {
   private qualityScore(location: string, preferLossless = false): number {
     try {
       const size = fs.statSync(location).size;
-      const losslessBonus =
-        isUniversalLossless(location) || (preferLossless && isFlac(location)) ? 1_000_000 : 0;
-      return losslessBonus + size / 1_000_000;
+      // A tier is worth more than any file size, so size only breaks ties.
+      return qualityTier(location, preferLossless) * 1_000_000 + size / 1_000_000;
     } catch {
       return 0;
     }
