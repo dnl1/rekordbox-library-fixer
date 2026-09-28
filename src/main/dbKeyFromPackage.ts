@@ -14,7 +14,6 @@ import { inflateRawSync, inflateSync } from 'zlib';
  */
 
 export const PYREKORDBOX_WHEEL = {
-  version: '0.4.4',
   url: 'https://files.pythonhosted.org/packages/b1/a8/28d28f02683bee40e3cfa32caed7c46e47daffb51482798fea9af0ab23cb/pyrekordbox-0.4.4-py3-none-any.whl',
   sha256: '2de933870126b9a0ef04bea372f1c5934efcfbb2501efb6b47d8ace0e17fb3d8',
 } as const;

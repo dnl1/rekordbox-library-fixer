@@ -158,7 +158,6 @@ export const useLibrary = (showNotification: ShowNotification) => {
     isLoading,
     startupComplete,
     selectLibrary,
-    loadLibrary,
     openLibrary,
     loadFromDb,
     clearStoredData,
