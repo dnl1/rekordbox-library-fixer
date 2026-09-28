@@ -199,6 +199,42 @@ describe('Component Rendering Tests', () => {
     });
   });
 
+  describe('DuplicateItem — what found the set, and where the copies differ', () => {
+    const set = (over: Record<string, unknown> = {}) => ({
+      id: 'd1',
+      matchType: 'metadata',
+      matchedOn: ['artist', 'title', 'duration'],
+      confidence: 90,
+      tracks: [
+        { id: 'a', name: 'proglight', artist: 'X', location: '/Music/proglight.aiff', duration: 285, bitrate: 1411, size: 50_000_000 },
+        { id: 'b', name: 'proglight', artist: 'X', location: '/UnknownAlbum/proglight.wav', duration: 285, bitrate: 1411, size: 50_000_000 },
+      ],
+      ...over,
+    });
+
+    it('names the method and the fields it matched on', async () => {
+      const DuplicateItem = (await import('../../src/renderer/components/DuplicateItem')).default;
+      render(<DuplicateItem duplicate={set()} isSelected={false} onToggleSelection={vi.fn()} resolutionStrategy="keep-highest-quality" />);
+      expect(screen.getByText('Found by: Metadata')).toBeInTheDocument();
+      expect(screen.getByText(/Same artist, title and length/)).toBeInTheDocument();
+    });
+
+    it('lists where the files differ, and not the path', async () => {
+      const DuplicateItem = (await import('../../src/renderer/components/DuplicateItem')).default;
+      render(<DuplicateItem duplicate={set()} isSelected={false} onToggleSelection={vi.fn()} resolutionStrategy="keep-highest-quality" />);
+      expect(screen.getByText('Differs in: Format')).toBeInTheDocument();
+    });
+
+    it('says so when copies differ only in where they are', async () => {
+      const DuplicateItem = (await import('../../src/renderer/components/DuplicateItem')).default;
+      const same = set({ matchType: 'fingerprint', matchedOn: undefined });
+      (same.tracks as any[])[1].location = '/Other/proglight.aiff';
+      render(<DuplicateItem duplicate={same} isSelected={false} onToggleSelection={vi.fn()} resolutionStrategy="keep-highest-quality" />);
+      expect(screen.getByText('Found by: Identical files')).toBeInTheDocument();
+      expect(screen.getByText(/No difference between the copies apart from where they are/)).toBeInTheDocument();
+    });
+  });
+
   describe('DuplicateDetector', () => {
     it('should render without crashing', async () => {
       const DuplicateDetector = (await import('../../src/renderer/components/DuplicateDetector')).default;

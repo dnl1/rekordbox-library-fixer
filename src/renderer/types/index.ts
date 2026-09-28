@@ -42,6 +42,9 @@ export interface DuplicateItem {
   tracks: Track[];
   matchType: string;
   confidence: number;
+  /** The fields that were equal, as the detector recorded them. */
+  matchedOn?: string[];
+  filesMissing?: boolean;
   pathPreferences?: string[];
 }
 
@@ -50,10 +53,16 @@ export interface Track {
   name: string;
   artist: string;
   album?: string;
+  genre?: string;
   location: string;
   duration?: number;
   bitrate?: number;
   size?: number;
+  sampleRate?: number;
+  bitDepth?: number;
+  bpm?: number;
+  key?: string;
+  kind?: string;
   dateAdded?: string;
   dateModified?: string;
   rating?: number;

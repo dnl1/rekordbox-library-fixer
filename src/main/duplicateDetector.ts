@@ -3,12 +3,15 @@ import * as fs from 'fs';
 import * as mm from 'music-metadata';
 import { Track } from './rekordboxParser';
 import { Logger } from './logger';
+import { FALLBACK_FIELDS, IDENTICAL_FILE_FIELDS } from './duplicateMatch';
 
 export interface DuplicateSet {
   id: string;
   tracks: Track[];
   matchType: 'fingerprint' | 'metadata';
   confidence: number;
+  /** The fields that were equal — shown with the set, since they are all the evidence there is. */
+  matchedOn?: string[];
   /**
    * True when the files could not be read, so the set was matched on metadata
    * alone. Saying "2 entries · 1 file" for tracks whose files are all gone
@@ -89,6 +92,7 @@ export class DuplicateDetector {
           id,
           tracks: [...group],
           matchType: guessed ? 'metadata' : 'fingerprint',
+          matchedOn: guessed ? FALLBACK_FIELDS : IDENTICAL_FILE_FIELDS,
           confidence: guessed ? 75 : 100,
           filesMissing: guessed,
         });
@@ -134,6 +138,7 @@ export class DuplicateDetector {
             // A set built from metadata is a strong hint, not proof the files
             // are identical: say so rather than claiming a content match.
             matchType: guessed ? 'metadata' : 'fingerprint',
+            matchedOn: guessed ? FALLBACK_FIELDS : IDENTICAL_FILE_FIELDS,
             confidence: guessed ? 75 : 100,
             filesMissing: guessed,
           });
@@ -171,6 +176,7 @@ export class DuplicateDetector {
             id: crypto.randomBytes(8).toString('hex'),
             tracks: duplicateTracks,
             matchType: 'metadata',
+            matchedOn: [...options.metadataFields],
             confidence: this.calculateMetadataConfidence(duplicateTracks, options.metadataFields),
           };
           duplicateSets.push(set);

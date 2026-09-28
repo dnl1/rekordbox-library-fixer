@@ -32,6 +32,9 @@ export interface DbTrack {
   duration?: number;
   bitrate?: number;
   size?: number;
+  sampleRate?: number;
+  bitDepth?: number;
+  key?: string;
   bpm?: number;
   rating?: number;
   dateAdded?: Date;
@@ -90,6 +93,9 @@ interface ContentRow {
   Length: number | null;
   BitRate: number | null;
   FileSize: number | null;
+  SampleRate: number | null;
+  BitDepth: number | null;
+  KeyName: string | null;
   BPM: number | null;
   Rating: number | null;
   created_at: string | null;
@@ -122,13 +128,14 @@ export function mapRowsToLibrary(db: Db, dbPath: string): DbLibrary {
   const tracks = new Map<string, DbTrack>();
 
   const contentRows = db.prepare(`
-    SELECT c.ID, c.Title, c.FolderPath, c.Length, c.BitRate, c.FileSize,
+    SELECT c.ID, c.Title, c.FolderPath, c.Length, c.BitRate, c.FileSize, c.SampleRate, c.BitDepth,
            c.BPM, c.Rating, c.created_at,
-           ar.Name AS ArtistName, al.Name AS AlbumName, g.Name AS GenreName
+           ar.Name AS ArtistName, al.Name AS AlbumName, g.Name AS GenreName, k.ScaleName AS KeyName
     FROM djmdContent c
     LEFT JOIN djmdArtist ar ON ar.ID = c.ArtistID AND ar.rb_local_deleted = 0
     LEFT JOIN djmdAlbum  al ON al.ID = c.AlbumID  AND al.rb_local_deleted = 0
     LEFT JOIN djmdGenre  g  ON g.ID  = c.GenreID  AND g.rb_local_deleted  = 0
+    LEFT JOIN djmdKey    k  ON k.ID  = c.KeyID    AND k.rb_local_deleted  = 0
     WHERE c.rb_local_deleted = 0
   `).all() as ContentRow[];
 
@@ -154,6 +161,9 @@ export function mapRowsToLibrary(db: Db, dbPath: string): DbLibrary {
       duration: row.Length ?? undefined,
       bitrate: row.BitRate ?? undefined,
       size: row.FileSize ?? undefined,
+      sampleRate: row.SampleRate || undefined,
+      bitDepth: row.BitDepth || undefined,
+      key: row.KeyName || undefined,
       bpm: row.BPM ? row.BPM / 100 : undefined,
       rating: row.Rating ?? undefined,
       dateAdded: row.created_at ? new Date(row.created_at) : undefined,

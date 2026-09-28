@@ -170,6 +170,13 @@ collection has to go through the database.
   or decomposed and treats both as one file, and rekordbox libraries contain both spellings.
   Any path comparison — duplicate classification and the delete guard — normalises to NFC
   first, or one file reads as two and the kept track's file can be trashed.
+- **What found a duplicate set, and where its copies differ** (`src/main/duplicateMatch.ts`,
+  `src/renderer/utils/trackDifferences.ts`): every set says its method and the fields that were equal. What was called
+  "fingerprint" compares file size, length, bitrate and the first 1 MB — it finds copies of one file only, so it is
+  shown as "Identical files"; the same song as AIFF and WAV, or from two shops, needs Metadata. Each set also lists
+  where its copies differ — format, bitrate, sample rate, bit depth, length, exact size, tags, BPM, key, rating, cues,
+  loops, date added — and never the path, which differs for every copy and says nothing about the files. The database
+  reader supplies sample rate, bit depth and key for this.
 - **Duplicate kinds** (`src/renderer/utils/classifyDuplicateSet.ts`): distinguishes several
   entries pointing at one file from genuinely duplicated files, which decides whether
   resolving can free disk space.

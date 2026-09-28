@@ -18,6 +18,12 @@ import { pickRecommendedTrack } from '../utils/pickRecommendedTrack';
 import { deletableFileCount, distinctFileCount } from '../utils/classifyDuplicateSet';
 import { normalizePathForCompare } from '../utils/normalizePath';
 import { streamingServiceOf, isStreamingTrack } from '../utils/streamingSource';
+import { trackDifferences } from '../utils/trackDifferences';
+import { describeMatch } from '../../main/duplicateMatch';
+
+/** Differences already visible in each copy's details, highlighted there rather than repeated. */
+const SHOWN_IN_DETAILS = new Set(['artist', 'album', 'duration', 'size', 'bitrate', 'rating', 'cues', 'loops']);
+const differs = 'text-te-amber-600 font-semibold';
 
 
 interface DuplicateItemProps {
@@ -38,6 +44,10 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [revealProblem, setRevealProblem] = useState<string | null>(null);
+
+  const match = useMemo(() => describeMatch(duplicate), [duplicate]);
+  const differences = useMemo(() => trackDifferences(duplicate.tracks), [duplicate.tracks]);
+  const differing = useMemo(() => new Set(differences.map((d) => d.field)), [differences]);
 
   const { openFileLocation } = useFileOperations();
   const preferLossless = useSettingsStore((state) => state.scanOptions.preferLossless);
@@ -152,8 +162,8 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                 {duplicate.tracks.length} duplicates
               </span>
               <span className="text-xs text-zinc-400">•</span>
-              <span className="text-xs text-zinc-400 capitalize">
-                {duplicate.matchType} match
+              <span className="text-xs text-te-grey-600 font-te-mono" title={match.detail}>
+                Found by: {match.method}
               </span>
               <span className="text-xs text-zinc-400">•</span>
               <span
@@ -175,6 +185,18 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
               </span>
               <ConfidenceBadge confidence={duplicate.confidence} />
             </div>
+            <div className="text-[11px] font-te-mono mt-0.5 text-te-grey-500">
+              {match.detail}
+            </div>
+            <div className="text-[11px] font-te-mono mt-0.5">
+              {differences.length === 0 ? (
+                <span className="text-te-grey-500">No difference between the copies apart from where they are</span>
+              ) : (
+                <span className="text-te-amber-600" title={differences.map((d) => `${d.label}: ${Object.values(d.values).join(' / ')}`).join('\n')}>
+                  Differs in: {differences.map((d) => d.label).join(' · ')}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -193,7 +215,6 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
       {isExpanded && (
         <div className="mt-3 space-y-2 te-expanded-content">
           {duplicate.tracks.map((track: any) => {
-            console.log('🎵 Rendering track:', { id: track.id, location: track.location, name: track.name });
             const isRecommended = recommendedTrack && track.id === recommendedTrack.id;
             const isManuallySelected = resolutionStrategy === 'manual' && track.id === selectedTrackId;
 
@@ -260,33 +281,44 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                       <div className="space-y-0.5">
                         <div className="flex items-center space-x-1.5 te-label">
                           <Music className="w-3 h-3" />
-                          <span className="truncate font-te-mono">{track.artist}</span>
+                          <span className={`truncate font-te-mono ${differing.has('artist') ? differs : ''}`}>{track.artist}</span>
                         </div>
                         <div className="flex items-center space-x-1.5 te-label">
                           <Disc className="w-3 h-3" />
-                          <span className="truncate font-te-mono">{track.album || 'No Album'}</span>
+                          <span className={`truncate font-te-mono ${differing.has('album') ? differs : ''}`}>{track.album || 'No Album'}</span>
                         </div>
                         <div className="flex items-center space-x-1.5 te-label">
                           <Clock className="w-3 h-3" />
-                          <span className="font-te-mono">{formatDuration(track.duration)}</span>
+                          <span className={`font-te-mono ${differing.has('duration') ? differs : ''}`}>{formatDuration(track.duration)}</span>
                         </div>
                       </div>
 
                       <div className="space-y-0.5">
                         <div className="flex items-center space-x-1.5 te-label">
                           <HardDrive className="w-3 h-3" />
-                          <span className="font-te-mono">{formatFileSize(track.size)}</span>
+                          <span className={`font-te-mono ${differing.has('size') ? differs : ''}`}>{formatFileSize(track.size)}</span>
                         </div>
                         <div className="flex items-center space-x-1.5 te-label">
                           <span className="font-te-mono">Bitrate:</span>
-                          <span className="font-te-mono">{track.bitrate || 'N/A'} kbps</span>
+                          <span className={`font-te-mono ${differing.has('bitrate') ? differs : ''}`}>{track.bitrate || 'N/A'} kbps</span>
                         </div>
                         <div className="flex items-center space-x-1.5 te-label">
                           <Star className="w-3 h-3" />
-                          <span className="font-te-mono">Rating: {track.rating || 0}/5</span>
+                          <span className={`font-te-mono ${differing.has('rating') ? differs : ''}`}>Rating: {track.rating || 0}/5</span>
                         </div>
                       </div>
                     </div>
+
+                    {differences.some((d) => !SHOWN_IN_DETAILS.has(d.field)) && (
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs font-te-mono">
+                        {differences.filter((d) => !SHOWN_IN_DETAILS.has(d.field)).map((d) => (
+                          <span key={d.field}>
+                            <span className="te-label">{d.label}:</span>{' '}
+                            <span className={differs}>{d.values[track.id]}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="mt-1.5 text-xs te-label">
                       <div className="flex flex-col space-y-1">
@@ -324,10 +356,18 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
                       </div>
                     </div>
 
-                    {(track.cues?.length > 0 || track.loops?.length > 0) && (
+                    {(track.cues?.length > 0 || track.loops?.length > 0 || differing.has('cues') || differing.has('loops')) && (
                       <div className="mt-1 flex space-x-2 text-xs text-te-green-600">
-                        {track.cues?.length > 0 && <span className="font-te-mono">✓ {track.cues.length} cues</span>}
-                        {track.loops?.length > 0 && <span className="font-te-mono">✓ {track.loops.length} loops</span>}
+                        {(track.cues?.length > 0 || differing.has('cues')) && (
+                          <span className={`font-te-mono ${differing.has('cues') ? differs : ''}`}>
+                            {track.cues?.length > 0 ? '✓' : '✗'} {track.cues?.length ?? 0} cues
+                          </span>
+                        )}
+                        {(track.loops?.length > 0 || differing.has('loops')) && (
+                          <span className={`font-te-mono ${differing.has('loops') ? differs : ''}`}>
+                            {track.loops?.length > 0 ? '✓' : '✗'} {track.loops?.length ?? 0} loops
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

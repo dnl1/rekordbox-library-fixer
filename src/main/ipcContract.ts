@@ -49,6 +49,8 @@ export interface DuplicateSet {
   tracks: TrackPayload[];
   matchType: 'fingerprint' | 'metadata';
   confidence: number;
+  /** The fields that were equal. Absent on sets cached before it was recorded. */
+  matchedOn?: string[];
   filesMissing?: boolean;
   pathPreferences?: string[];
 }

@@ -36,6 +36,12 @@ beforeEach(() => {
       ('t1','Bruxelles arrive','a1','al1','g1','/Music/bx.mp3',217,320,8000000,14000,4,'2020-10-03 12:14:15.969 +00:00',0);
     INSERT INTO djmdContent VALUES
       ('t2','Deleted','a1','al1','g1','/Music/gone.mp3',100,128,1000,8750,0,'2021-01-01 00:00:00 +00:00',1);
+    ALTER TABLE djmdContent ADD COLUMN SampleRate INTEGER;
+    ALTER TABLE djmdContent ADD COLUMN BitDepth INTEGER;
+    ALTER TABLE djmdContent ADD COLUMN KeyID TEXT;
+    UPDATE djmdContent SET SampleRate = 44100, BitDepth = 16, KeyID = 'k1' WHERE ID = 't1';
+    CREATE TABLE djmdKey (ID TEXT PRIMARY KEY, ScaleName TEXT, rb_local_deleted INTEGER DEFAULT 0);
+    INSERT INTO djmdKey VALUES ('k1', 'Am', 0);
     INSERT INTO djmdCue VALUES ('c1','t1',0,15000,-1,'Intro',0);
     INSERT INTO djmdCue VALUES ('c2','t1',3,30000,45000,'Loop A',0);
     INSERT INTO djmdCue VALUES ('c3','t1',2,60000,-1,'Hot B',0);
@@ -64,6 +70,10 @@ describe('mapRowsToLibrary', () => {
     expect(t.bitrate).toBe(320);
     expect(t.size).toBe(8000000);
     expect(t.rating).toBe(4);
+  });
+
+  it('reads the sample rate, bit depth and key, which tell two copies of a song apart', () => {
+    expect(mapRowsToLibrary(db, file).tracks.get('t1')).toMatchObject({ sampleRate: 44100, bitDepth: 16, key: 'Am' });
   });
 
   it('scales BPM down by 100, as rekordbox stores it', () => {
