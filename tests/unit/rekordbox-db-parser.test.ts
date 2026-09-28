@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3-multiple-ciphers';
 import * as fs from 'fs';
 import * as path from 'path';
-import { mapRowsToLibrary } from '../../src/main/rekordboxDbParser';
+import { mapRowsToLibrary, hotcueSlot } from '../../src/main/rekordboxDbParser';
 
 let file: string;
 let db: InstanceType<typeof Database>;
@@ -84,10 +84,16 @@ describe('mapRowsToLibrary', () => {
     expect(t.cues.map((c) => c.start).sort()).toEqual([15, 60]);
   });
 
-  it('records the hotcue slot from Kind, leaving memory cues (Kind 0) without one', () => {
+  it('records the hotcue slot as the XML numbers it, leaving memory cues (Kind 0) without one', () => {
     const t = mapRowsToLibrary(db, file).tracks.get('t1')!;
     expect(t.cues.find((c) => c.start === 15)!.hotcue).toBeUndefined();
-    expect(t.cues.find((c) => c.start === 60)!.hotcue).toBe(2);
+    // Kind 2 is hot cue B, which the XML writes as Num 1.
+    expect(t.cues.find((c) => c.start === 60)!.hotcue).toBe(1);
+  });
+
+  it('keeps a hot loop on its slot', () => {
+    // Kind 3 is C: before, loops lost their slot and went out as memory loops.
+    expect(mapRowsToLibrary(db, file).tracks.get('t1')!.loops[0].hotcue).toBe(2);
   });
 
   it('parses created_at into a date', () => {
@@ -106,5 +112,15 @@ describe('mapRowsToLibrary', () => {
 
   it('uses the database path as the library path', () => {
     expect(mapRowsToLibrary(db, file).libraryPath).toBe(file);
+  });
+});
+
+describe('hotcueSlot', () => {
+  it('skips Kind 4, as rekordbox does: A–C are 1–3, D–H are 5–9', () => {
+    expect([1, 2, 3, 5, 6, 7, 8, 9].map(hotcueSlot)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('gives a memory cue, and a Kind rekordbox never writes, no slot', () => {
+    expect([0, null, undefined, 4, 10].map(hotcueSlot)).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 });

@@ -17,7 +17,8 @@ type Db = InstanceType<typeof Database>;
  * - BPM is stored times 100 (14000 = 140.00).
  * - A cue is a loop only when OutMsec is positive: ordinary cues store -1,
  *   not null, so a truthiness check misreads every cue as a loop. Kind
- *   identifies the hotcue slot (0 = memory cue); it does not mark loops.
+ *   identifies the hotcue slot (0 = memory cue, A–H = 1–3 and 5–9); it does
+ *   not mark loops.
  * - Deleted rows linger with rb_local_deleted = 1 and must be skipped.
  */
 
@@ -35,7 +36,7 @@ export interface DbTrack {
   rating?: number;
   dateAdded?: Date;
   cues: Array<{ name: string; type: 'CUE'; start: number; hotcue?: number }>;
-  loops: Array<{ name: string; start: number; end: number }>;
+  loops: Array<{ name: string; start: number; end: number; hotcue?: number }>;
 }
 
 export interface DbPlaylist {
@@ -56,6 +57,21 @@ export function unlockDatabase(db: Db, key: string): void {
   db.pragma("cipher='sqlcipher'");
   db.pragma('legacy=4');
   db.pragma(`key='${key.replace(/'/g, "''")}'`);
+}
+
+/**
+ * The hot cue slot a `djmdCue.Kind` stands for, numbered as the XML's `Num`
+ * is: 0 for A through 7 for H, undefined for a memory cue (Kind 0).
+ *
+ * The database skips 4: A–C are 1–3 and D–H are 5–9, verified against a real
+ * rekordbox 7 library. Passing Kind through as the slot turned every hot cue
+ * one letter later in an XML — A became B — and D onwards two.
+ */
+export function hotcueSlot(kind: number | null | undefined): number | undefined {
+  if (!kind || kind <= 0) { return undefined; }
+  if (kind <= 3) { return kind - 1; }
+  if (kind >= 5 && kind <= 9) { return kind - 2; }
+  return undefined;
 }
 
 /** Ordinary cues store OutMsec = -1; only a positive value marks a loop. */
@@ -147,7 +163,7 @@ export function mapRowsToLibrary(db: Db, dbPath: string): DbLibrary {
           name: m.Comment ?? '',
           type: 'CUE' as const,
           start: (m.InMsec ?? 0) / 1000,
-          hotcue: m.Kind && m.Kind > 0 ? m.Kind : undefined,
+          hotcue: hotcueSlot(m.Kind),
         })),
       loops: marks
         .filter(isLoop)
@@ -155,6 +171,7 @@ export function mapRowsToLibrary(db: Db, dbPath: string): DbLibrary {
           name: m.Comment ?? '',
           start: (m.InMsec ?? 0) / 1000,
           end: (m.OutMsec ?? 0) / 1000,
+          hotcue: hotcueSlot(m.Kind),
         })),
     });
   }

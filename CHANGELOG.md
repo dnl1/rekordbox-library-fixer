@@ -5,6 +5,9 @@
 ### 🎉 New Features
 - **Clean up converted FLACs**: Maintenance → Clean up converted FLACs finds each FLAC left beside the AIFF or WAV the library now uses — a conversion run without "move the originals to the trash", or one made by another tool — and moves it to the trash. Only a FLAC no entry points at goes, only when an entry points at the file beside it, and only when the two decode to exactly the same audio; the same name is not proof. What rekordbox points at is read again just before anything goes, so rekordbox may stay open, and nothing is written into the database. For rekordbox's database only.
 
+### 🐛 Bug Fixes
+- **Hot cues keep their letter when a database library is written as XML**: rekordbox's database numbers hot cues A–H as 1, 2, 3, 5, 6, 7, 8, 9, and the XML as 0–7. The number was passed straight across, so A became B and D onwards moved two letters; hot loops lost their slot altogether and went out as memory loops.
+
 ## [0.7.0-beta.3] - 2026-09-28
 
 ### 🎉 New Features

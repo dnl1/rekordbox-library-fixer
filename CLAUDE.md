@@ -67,6 +67,16 @@ collection has to go through the database.
   value marks a loop. `master.db` lives in the unversioned `Pioneer/rekordbox` directory on
   Rekordbox 7. The SQLCipher key is never hardcoded; the user pastes it on the load screen and
   it persists in the settings store.
+
+  About cues, verified against a real rekordbox 7 library (2026-09-28): `djmdCue.Kind` is 0 for a
+  memory cue and 1, 2, 3, 5, 6, 7, 8, 9 for hot cues A–H — 4 is skipped — so `hotcueSlot()` maps it to
+  the XML's `Num` 0–7. The collection's cues live only in `djmdCue`: the ANLZ files' cue tags
+  (`PCOB`/`PCO2`) are empty locally even for a track with hot cues, so a track with no hot cue row has
+  none. A `djmdCue` row inserted with rekordbox closed — `InFrame` = `InMsec` × 150 / 1000, `OutMsec`
+  -1, `ContentUUID` from `djmdContent.UUID` — shows up in rekordbox at that position; whether a USB
+  export carries it is not yet checked. The ANLZ files (`share/` + `AnalysisDataPath`, beside
+  `master.db`) hold the beatgrid (`PQTZ`) and rekordbox's phrase analysis (`PSSI`: phrase starts as
+  1-based beat numbers, with a mood and a kind — Intro, Up, Down, Chorus, Outro for a high mood).
 - **The IPC contract** (`src/main/ipcContract.ts`): one set of payload and result types,
   imported by `preload.ts`, the handlers and the renderer's `window.electronAPI` declaration.
   Both sides used to declare their own shapes, so a field the main process stopped sending
