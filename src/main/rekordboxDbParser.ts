@@ -204,6 +204,26 @@ function buildPlaylists(db: Db): DbPlaylist[] {
  * never touched. The copy is always removed.
  */
 export async function parseDb(dbPath: string, key: string): Promise<DbLibrary> {
+  return withReadOnlyCopy(dbPath, key, (db) => mapRowsToLibrary(db, dbPath));
+}
+
+/**
+ * Whether `key` unlocks this database. Checked on a copy, as reading is, so
+ * rekordbox may stay open. A wrong key surfaces only on the first read — the
+ * driver accepts any key until then — so this reads one row.
+ */
+export async function keyOpensDatabase(dbPath: string, key: string): Promise<boolean> {
+  try {
+    return await withReadOnlyCopy(dbPath, key, (db) => {
+      db.prepare('SELECT count(*) FROM sqlite_master').get();
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function withReadOnlyCopy<T>(dbPath: string, key: string, read: (db: Db) => T): Promise<T> {
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rbdb-'));
   const copy = path.join(dir, 'master.db');
   await fs.promises.copyFile(dbPath, copy);
@@ -215,7 +235,7 @@ export async function parseDb(dbPath: string, key: string): Promise<DbLibrary> {
   try {
     db = new Database(copy, { readonly: true });
     unlockDatabase(db, key);
-    return mapRowsToLibrary(db, dbPath);
+    return read(db);
   } finally {
     if (db) { db.close(); }
     await fs.promises.rm(dir, { recursive: true, force: true });

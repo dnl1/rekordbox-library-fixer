@@ -80,10 +80,15 @@ collection has to go through the database.
 - **The database key** (`src/renderer/utils/keyExtractionCommand.ts`): never hardcoded, never
   shipped. The load screen shows the one-line command for the host platform that prints the key
   locally via the open-source pyrekordbox package, and a pasted key is checked for shape (64 hex
-  characters) before it is used. **Get the key automatically** (`src/main/dbKeyRecovery.ts`) runs that
-  same one-liner with the local Python — `py` first on Windows, since a bare `python` there is often the
-  Store alias — installing pyrekordbox with `pip --user` if it is missing. Fixed commands only; a test
-  keeps its one-liner identical to the one shown on screen.
+  characters) before it is used. **Get the key automatically** first reads it out of the pyrekordbox
+  package itself (`src/main/dbKeyFromPackage.ts`): the 0.4.4 wheel is fetched from PyPI, checked against
+  its pinned SHA-256, and `BLOB`/`BLOB_KEY` are read from its source and deobfuscated as pyrekordbox does
+  (base85, XOR, zlib) — no Python needed, and the key still comes from the package, not this app. The key
+  is checked against the database being opened (`keyOpensDatabase`, on a read-only copy) before it is
+  stored. If that fails (offline, a pyrekordbox that moved the key), `src/main/dbKeyRecovery.ts` runs the
+  one-liner with the local Python — `py` first on Windows — installing pyrekordbox into a venv of the app's
+  own, or with `pip --user` where there is no venv. Tests use a made-up wheel
+  (`tests/fixtures/fake-pyrekordbox.whl`); the real key never enters the repo.
 - **FLAC conversion** (`src/main/flacConverter.ts`, `rekordboxDbConverter.ts`, `conversionSettlement.ts`,
   `ipc/conversion.ts`, `components/maintenance/ConvertFlacPanel.tsx`): FLAC → AIFF, WAV or MP3 320 kbps CBR
   beside the original, for players that cannot read FLAC. Runs a bundled ffmpeg (`ffmpegBinary.ts`): the

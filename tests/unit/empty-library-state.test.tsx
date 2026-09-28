@@ -85,12 +85,14 @@ describe('EmptyLibraryState', () => {
   it('gets the key itself and opens the database with it', async () => {
     useSettingsStore.setState({ rekordboxDbKey: '' } as any);
     const key = 'ab'.repeat(32);
-    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: true, data: { key, installed: true } }));
+    (window as any).electronAPI.recoverDbKey = vi.fn(async () => ({ success: true, data: { key, installed: false, source: 'package' } }));
     show([DB]);
     fireEvent.click(await screen.findByTitle(DB.path));
     fireEvent.click(screen.getByRole('button', { name: /Get the key automatically/ }));
     await waitFor(() => expect(onLoadFromDb).toHaveBeenCalledWith(DB.path));
     expect(useSettingsStore.getState().rekordboxDbKey).toBe(key);
+    // The key is checked against the database being opened.
+    expect((window as any).electronAPI.recoverDbKey).toHaveBeenCalledWith(DB.path);
   });
 
   it('says why when the key cannot be got, and keeps the paste field', async () => {

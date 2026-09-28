@@ -47,7 +47,7 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
     setRecovering(true);
     setRecoveryError(null);
     try {
-      const res = await window.electronAPI.recoverDbKey();
+      const res = await window.electronAPI.recoverDbKey(pendingDb ?? undefined);
       if (res.success && res.data) {
         setRekordboxDbKey(res.data.key);
         if (pendingDb) { onLoadFromDb?.(pendingDb); setPendingDb(null); }
@@ -175,11 +175,12 @@ export const EmptyLibraryState: React.FC<EmptyLibraryStateProps> = ({
                 className="btn-primary text-xs mb-1 disabled:opacity-60"
               >
                 <KeyRound size={12} className="inline mr-1.5" />
-                {recovering ? 'Getting the key… (installing pyrekordbox the first time)' : 'Get the key automatically'}
+                {recovering ? 'Getting the key from pyrekordbox…' : 'Get the key automatically'}
               </button>
               <p className="text-[10px] font-te-mono text-te-grey-500 normal-case leading-relaxed mb-3">
-                Runs the command below with Python on this machine, installing pyrekordbox for your user
-                if it is not there, and opens the database with the key it prints.
+                Downloads the open-source pyrekordbox package from PyPI (checked against its published
+                hash), reads the key out of it the way pyrekordbox does, checks it opens this database, and
+                opens it. No Python needed; if that fails, it runs the command below with your Python.
               </p>
               {recoveryError && (
                 <p className="text-[11px] font-te-mono text-red-500 normal-case mb-3">{recoveryError}</p>
