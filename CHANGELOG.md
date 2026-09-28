@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### 🎉 New Features
+- **Clean up converted FLACs**: Maintenance → Clean up converted FLACs finds each FLAC left beside the AIFF or WAV the library now uses — a conversion run without "move the originals to the trash", or one made by another tool — and moves it to the trash. Only a FLAC no entry points at goes, only when an entry points at the file beside it, and only when the two decode to exactly the same audio; the same name is not proof. What rekordbox points at is read again just before anything goes, so rekordbox may stay open, and nothing is written into the database. For rekordbox's database only.
+
 ## [0.7.0-beta.3] - 2026-09-28
 
 ### 🎉 New Features

@@ -503,6 +503,29 @@ export class FlacConverter {
     return a === b ? null : 'the audio differs';
   }
 
+  /**
+   * Why two files are not the same recording, or null when they are: same
+   * rate, channels and length, and the decoded audio hashing the same.
+   *
+   * Looser than `provesIdentical` on purpose. That one asks whether a file is
+   * what this app would have written; this asks only whether the audio is the
+   * same, so a 16-bit FLAC someone else converted to a 24-bit AIFF still
+   * matches — the widened hash compares the samples, not their container.
+   */
+  async sameAudio(a: string, b: string, cancelToken: CancelToken): Promise<string | null> {
+    let first: AudioShape;
+    let second: AudioShape;
+    try { first = await probeAudio(a); } catch { return `${path.basename(a)} cannot be read`; }
+    try { second = await probeAudio(b); } catch { return `${path.basename(b)} cannot be read`; }
+    if (first.sampleRate !== second.sampleRate) { return `sample rate ${first.sampleRate} vs ${second.sampleRate}`; }
+    if (first.channels !== second.channels) { return `${first.channels} vs ${second.channels} channels`; }
+    if (first.samples > 0 && second.samples > 0 && first.samples !== second.samples) {
+      return `length ${first.samples} vs ${second.samples} samples`;
+    }
+    const [x, y] = [await this.pcmDigest(a, cancelToken), await this.pcmDigest(b, cancelToken)];
+    return x === y ? null : 'the audio differs';
+  }
+
   /** An MD5 of the decoded audio, widened to 32 bits so any source bit depth compares. */
   private async pcmDigest(file: string, cancelToken: CancelToken): Promise<string> {
     const out = await this.run(

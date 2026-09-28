@@ -110,6 +110,13 @@ collection has to go through the database.
   (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertFlacSession.ts`, not
   the panel: the library reload after a write replaces the whole page with a spinner, which unmounted the
   panel at the moment its result arrived.
+- **Cleaning up converted FLACs** (`src/main/flacCleanup.ts`, `components/maintenance/CleanupFlacPanel.tsx`,
+  `conversion/flacCleanupSession.ts`): trashes a `Track.flac` left beside the `Track.aiff`/`.wav` the library uses.
+  It goes only when no entry points at the FLAC, an entry points at the conversion, and the two decode to the same
+  audio (`FlacConverter.sameAudio`: rate, channels, length, and the MD5 of the PCM widened to 32 bits, so a 16-bit
+  FLAC matches a 24-bit AIFF another tool made). `master.db` only — an XML library does not say what rekordbox
+  itself uses. Nothing is written into the database; its locations are re-read (`parseDb`, on a copy) after the
+  checks and before the trash, and a cancelled run trashes nothing. A FLAC an entry still uses is Convert's job.
 - **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),
   which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
   `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's
@@ -281,6 +288,8 @@ exposed through `window.electronAPI`:
 - `showFileInFolder(path)`: Open file location in system file manager; reports back when the file is gone
 - `convertFlacPreview(data)` / `convertFlac(request)` / `cancelConvertFlac(id)` / `onConvertFlacProgress(cb)`:
   FLAC conversion, writing into `master.db` or the XML depending on what is open
+- `cleanupFlacPreview(data)` / `cleanupFlac(request)` / `onCleanupFlacProgress(cb)`: trash the FLACs a conversion
+  left behind (cancelled through `cancelConvertFlac`, which shares the table of runs in flight)
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with
   `dbKey`) / `removeEntriesInDb(data)`: the database-native writes, each requiring rekordbox to be closed
   and taking a backup first. `mergeDuplicatesInDb` with `deleteFromDisk` also trashes the removed copies'

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
-  ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress,
+  ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -160,6 +160,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, progress: ConvertFlacProgress) => callback(progress);
     ipcRenderer.on('convert-flac-progress', handler);
     return () => { ipcRenderer.removeListener('convert-flac-progress', handler); };
+  },
+  // The FLACs a conversion left behind. Cancelled through cancelConvertFlac.
+  cleanupFlacPreview: (data: { tracks: TrackPayload[] }) => ipcRenderer.invoke('cleanup-flac-preview', data),
+  cleanupFlac: (data: FlacCleanupRequest) => ipcRenderer.invoke('cleanup-flac', data),
+  onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: FlacCleanupProgress) => callback(progress);
+    ipcRenderer.on('cleanup-flac-progress', handler);
+    return () => { ipcRenderer.removeListener('cleanup-flac-progress', handler); };
   },
 
   // Native drag-and-drop

@@ -1,6 +1,7 @@
 // Global types and interfaces
 import type {
   IpcResult, RecoveredDbKey, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
+  FlacCleanupPreview, FlacCleanupRequest, FlacCleanupProgress, FlacCleanupSummary,
 } from '../../main/ipcContract';
 
 export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
@@ -252,6 +253,9 @@ declare global {
       convertFlac: (data: ConvertFlacRequest) => Promise<IpcResult<ConvertFlacSummary>>;
       cancelConvertFlac: (operationId: string) => Promise<{ success: boolean }>;
       onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => () => void;
+      cleanupFlacPreview: (data: { tracks: any[] }) => Promise<IpcResult<FlacCleanupPreview>>;
+      cleanupFlac: (data: FlacCleanupRequest) => Promise<IpcResult<FlacCleanupSummary>>;
+      onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => () => void;
       // File Drop APIs
       handleNativeDrop: (filePaths: string[]) => Promise<{ success: boolean; data?: { filePaths: string[]; filePath?: string }; error?: string }>;
       onNativeFileDrop: (callback: (filePaths: string[]) => void) => () => void;

@@ -9,9 +9,14 @@ import { backupDatabaseFile } from '../backupDatabase';
 import { assertWritableLibraryPath, isRekordboxDatabasePath } from '../librarySource';
 import { isRekordboxRunning } from '../rekordboxRunning';
 import { hostEnvironment, toHostPath } from '../hostPath';
-import type { TrackPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacSummary, IpcResult } from '../ipcContract';
+import { planFlacCleanup, cleanupFlacs } from '../flacCleanup';
+import { parseDb } from '../rekordboxDbParser';
+import type {
+  TrackPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacSummary, IpcResult,
+  FlacCleanupPreview, FlacCleanupRequest, FlacCleanupSummary,
+} from '../ipcContract';
 
-/** Runs in flight, so a cancel request can reach the one it names. */
+/** Runs in flight — conversions and cleanups — so a cancel request can reach the one it names. */
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
 const ffmpegPath = () => resolveFfmpegPath({
@@ -233,4 +238,74 @@ export function registerConversionIpc(): void {
     if (token) { token.cancelled = true; }
     return { success: true };
   });
+
+  registerFlacCleanupIpc();
 }
+
+/**
+ * Trashing the FLACs a conversion left behind. Only for rekordbox's database:
+ * an XML library pointing at an AIFF says nothing about rekordbox's own
+ * collection, which may still point at the FLAC — the same reason Convert
+ * trashes originals for a database only. Nothing is written into the
+ * database, so rekordbox may stay open; what it points at is re-read before
+ * anything goes.
+ */
+function registerFlacCleanupIpc(): void {
+  ipcMain.handle('cleanup-flac-preview', async (_e, { tracks }: { tracks: TrackPayload[] }): Promise<IpcResult<FlacCleanupPreview>> => {
+    try {
+      const plan = planFlacCleanup(onThisDisk(tracks).hostTracks);
+      return {
+        success: true,
+        data: {
+          available: ffmpegPath() !== null,
+          files: plan.candidates.length,
+          totalSizeBytes: plan.candidates.reduce((sum, c) => sum + fileSize(c.flac), 0),
+          stillUsed: plan.stillUsed,
+        },
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Preview failed' };
+    }
+  });
+
+  ipcMain.handle('cleanup-flac', async (event, request: FlacCleanupRequest): Promise<IpcResult<FlacCleanupSummary>> => {
+    const { operationId, tracks, libraryPath, dbKey } = request;
+    const ffmpeg = ffmpegPath();
+    if (!ffmpeg) {
+      return { success: false, error: 'This build of the app has no ffmpeg for this platform, so it cannot compare the audio.' };
+    }
+    if (!isRekordboxDatabasePath(libraryPath)) {
+      return { success: false, error: "Open rekordbox's database for this — an XML library does not say which files rekordbox still uses." };
+    }
+    if (!dbKey) { return { success: false, error: 'The database key is needed to read master.db.' }; }
+
+    const cancelToken = { cancelled: false };
+    cancelTokens.set(operationId, cancelToken);
+    try {
+      const disk = onThisDisk(tracks);
+      const converter = new FlacConverter(ffmpeg);
+      const outcome = await cleanupFlacs(
+        planFlacCleanup(disk.hostTracks),
+        {
+          sameAudio: (flac, converted, token) => converter.sameAudio(flac, converted, token),
+          currentLocations: async () => {
+            const library = await parseDb(libraryPath, dbKey);
+            return [...library.tracks.values()].map((t) => disk.toHost(t.location));
+          },
+          trash: (file) => shell.trashItem(file),
+        },
+        (progress) => { event.sender.send('cleanup-flac-progress', { operationId, ...progress }); },
+        cancelToken
+      );
+      return { success: true, data: outcome };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Cleanup failed' };
+    } finally {
+      cancelTokens.delete(operationId);
+    }
+  });
+}
+
+const fileSize = (file: string): number => {
+  try { return fs.statSync(file).size; } catch { return 0; }
+};

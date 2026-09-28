@@ -217,5 +217,40 @@ export interface ConvertFlacSummary {
   backupPath?: string;
 }
 
+/** FLACs left beside the AIFF or WAV the library now uses, before any is checked. */
+export interface FlacCleanupPreview {
+  /** False when this build carries no ffmpeg, which the audio check needs. */
+  available: boolean;
+  /** FLACs no entry uses, each beside a lossless file an entry does use. */
+  files: number;
+  totalSizeBytes: number;
+  /** FLACs beside a conversion that an entry still points at — Convert's to settle. */
+  stillUsed: number;
+}
+
+export interface FlacCleanupRequest {
+  operationId: string;
+  /** The whole library: a FLAC any entry points at is never a candidate. */
+  tracks: TrackPayload[];
+  /** A master.db only: an XML library says nothing about what rekordbox itself uses. */
+  libraryPath: string;
+  dbKey: string;
+}
+
+export interface FlacCleanupProgress {
+  operationId: string;
+  current: number;
+  total: number;
+  currentFile: string;
+}
+
+export interface FlacCleanupSummary {
+  trashed: string[];
+  freedBytes: number;
+  kept: Array<{ file: string; reason: string }>;
+  failed: Array<{ file: string; error: string }>;
+  cancelled: boolean;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;
