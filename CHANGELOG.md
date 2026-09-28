@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0-beta.3] - 2026-09-28
+
+### 🎉 New Features
+- **Duplicates keep the copy in your consolidated folder**: the Consolidate destination is now remembered, and when a duplicate set has a copy inside it, that copy is the one kept — whatever the strategy. The strategy still decides among the copies inside. A copy kept elsewhere would have undone the consolidation.
+- **AIFF ranks above WAV**: both are lossless and play on every CDJ, but WAV keeps almost no tags or artwork, so of two lossless copies the AIFF is kept — in duplicates and in Consolidate's "Use quality score". A bigger WAV used to win on file size.
+
+### 🐛 Bug Fixes
+- **Resolving duplicates in `master.db` moves the files to the trash when asked**: the "Also move duplicate files to trash" box was ignored for a database library — the entries went, the files stayed. It now asks for the same confirmation as an XML library and trashes only files no remaining entry uses, after the database write has succeeded.
+- **The list reflects the merge**: after resolving in `master.db` the page kept the library as read before the write, so merged tracks stayed listed and a rescan found them again. The library is reopened.
+- **The copy marked as kept is the copy kept**: the badge, the delete confirmation and the write now come from one choice. The main process used to pick again with its own rules — "highest quality" there ignored the lossless preference the list used — so what you confirmed could differ from what happened.
+- **A merge never leaves a song without its file**: when the kept copy's file is missing — the consolidate drive unplugged, say — while a copy being retired still has its audio, that set is left untouched, stays in the list and the notice says why. Before, the only file could have gone to the trash.
+- **Trashing duplicates works under WSL**: `C:/…` paths are reached through `/mnt/c/…`.
+
+### 🧹 Housekeeping
+- **An unused resolver is gone**: `DuplicateDetector.resolveDuplicates` was never called by the app but carried a third copy of the keep-which-copy rules.
+
 ## [0.7.0-beta.2] - 2026-09-28
 
 ### 🧹 Housekeeping
