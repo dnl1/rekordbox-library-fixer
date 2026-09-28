@@ -70,14 +70,17 @@ let failed = false;
 for (const arch of arches) {
   const target = `${platform}-${arch}`;
   const pinned = PINNED[target];
+  const dir = join(root, 'vendor', 'ffmpeg', target);
   if (!pinned) {
     // Not fatal: the app still builds, and the conversion tool says it is not
     // available on this build instead of offering a button that cannot work.
+    // The folder is made anyway, empty, so electron-builder's extraResources
+    // has a source to copy for this architecture rather than one that is missing.
+    mkdirSync(dir, { recursive: true });
     console.warn(`[fetch-ffmpeg] no ffmpeg build for ${target}; FLAC conversion will be unavailable there.`);
     continue;
   }
 
-  const dir = join(root, 'vendor', 'ffmpeg', target);
   const exe = join(dir, platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   if (existsSync(exe)) {
     console.log(`[fetch-ffmpeg] ${target}: already present`);

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0-beta.1] - 2026-09-28
+
+### 🎉 New Features
+- **Convert FLAC for older players**: older CDJs and XDJs cannot play FLAC, and a FLAC collection finds that out at the club. Maintenance → Convert FLAC converts each file to AIFF, WAV or MP3 320 kbps beside it, under the same name, and points every entry at the new file — in `master.db` or in an XML library. Only what the file is changes: cues, loops, beatgrid, playlists and history stay with the track, and rekordbox keeps its analysis rather than redoing it. AIFF and WAV are sample-exact, checked frame for frame before a file takes its real name; WAV is written with the plain PCM header older CDJs require. MP3 is constant bit rate, lossy, and not sample-exact, and the panel says so. Nothing is ever overwritten, and the FLACs stay unless asked otherwise.
+- **Convert one playlist, then export it**: pick the playlist you are about to put on a USB stick, convert it, and export it from rekordbox as usual — it copies the converted files. A FLAC that an entry outside the playlist still uses never goes to the trash.
+- **A stopped run can be picked up**: a conversion that ended before writing the library — the app closed, rekordbox opened midway — leaves its finished files; the next run decodes each against its FLAC and reuses the identical ones instead of finding nothing to do.
+- **The database key without Python**: "Get the key automatically" downloads the open-source pyrekordbox package from PyPI, checks it against its published hash, reads the key out of it the way pyrekordbox does, checks it opens your database, and opens it. The app still ships no key.
+- **Windows libraries under WSL**: run from Linux on the same machine, `C:/…` paths are reached through `/mnt/c/…` and written back as rekordbox spells them.
+
+### 🐛 Bug Fixes
+- **Cues and loops survive an XML save**: rekordbox writes a mark's type as a number and the parser looked for words, so every XML the app saved — resolving duplicates, relocating, removing broken entries — went out with none of them. A real export's 12,171 marks now all survive.
+- **The rekordbox database is listed on Windows**: it was looked for in the home folder rather than `%APPDATA%`, so only XML exports appeared on the home screen and the database's backups never showed in the Backups tab. The file picker now opens a chosen `master.db` too, instead of sending it to the XML parser.
+- **Reopening after a database write keeps the library open**: removing broken entries or restoring a backup reopened `master.db` through the XML parser, which failed and closed the library.
+
+### 🧹 Housekeeping
+- **ffmpeg ships with the app**: the ffmpeg-static b6.1.1 build per platform and architecture, fetched against pinned checksums and bundled with its GPL licence. 32-bit Windows has none, and the conversion says it is unavailable there.
+
 ## [0.6.7] - 2026-09-25
 
 ### 🐛 Bug Fixes
