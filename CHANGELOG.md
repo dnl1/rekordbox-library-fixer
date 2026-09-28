@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-beta.2] - 2026-09-28
+
+### 🧹 Housekeeping
+- **Two leftovers of the key and reopen fixes are gone**: the library hook no longer hands out its XML-only loader, which every caller had stopped using and which would have sent a `master.db` through the XML parser; and the pinned pyrekordbox entry no longer carries a version no code read. Nothing changes in use.
+
 ## [0.7.0-beta.1] - 2026-09-28
 
 ### 🎉 New Features
