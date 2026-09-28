@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import * as path from 'path';
 
 /**
  * Get the rekordbox database key from pyrekordbox, the way the load screen
@@ -6,9 +7,15 @@ import { execFile } from 'child_process';
  * pasted back.
  *
  * The app still ships no key. It runs the open-source package on this machine
- * and reads what it prints: install pyrekordbox for the user if it is not
- * there, then ask it. Every command is fixed; nothing from the renderer is
- * passed to a shell.
+ * and reads what it prints. Every command is fixed; nothing from the renderer
+ * is passed to a shell.
+ *
+ * Where pyrekordbox comes from, in order: the Python already on the machine if
+ * it has it; else a virtual environment of the app's own, in its data folder;
+ * else `pip install --user`. The private environment comes before `--user`
+ * because Homebrew's Python and recent Debian and Ubuntu refuse `--user`
+ * installs outright ("externally-managed-environment") and it leaves the
+ * user's own packages alone. `--user` stays for a Python without `venv`.
  */
 
 /** Must match the command shown in src/renderer/utils/keyExtractionCommand.ts. */
@@ -40,7 +47,36 @@ export function pythonCandidates(platform: NodeJS.Platform): string[] {
 
 const lastLine = (text: string) => text.trim().split(/\r?\n/).pop() ?? '';
 
-export async function recoverDbKey(platform: NodeJS.Platform, run: Runner = runFile): Promise<KeyRecovery> {
+/**
+ * The line of a failure that says why. pip and venv end on a line that only
+ * names the command that failed; the cause — "ensurepip is not available",
+ * "externally-managed-environment" — is further up.
+ */
+export function reasonFrom(text: string): string {
+  // Tools wrap their messages, so a sentence is read across its lines: split
+  // into paragraphs at blank lines, rejoin each, and take the first sentence
+  // of the one that explains.
+  const paragraphs = text.trim().split(/\r?\n\s*\r?\n/)
+    .map((p) => p.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(' '))
+    .filter(Boolean);
+  const explains = /error|ensurepip|not available|externally-managed|no module named|permission denied/i;
+  const telling = paragraphs.find((p) => explains.test(p));
+  if (!telling) { return lastLine(text); }
+  return telling.match(/^.*?[.!](?=\s|$)/)?.[0] ?? telling;
+}
+
+/** The interpreter inside a virtual environment created at `dir`. */
+export function venvPython(dir: string, platform: NodeJS.Platform): string {
+  return platform === 'win32'
+    ? path.win32.join(dir, 'Scripts', 'python.exe')
+    : path.posix.join(dir, 'bin', 'python');
+}
+
+export async function recoverDbKey(
+  platform: NodeJS.Platform,
+  run: Runner = runFile,
+  venvDir?: string
+): Promise<KeyRecovery> {
   let python: string | null = null;
   for (const candidate of pythonCandidates(platform)) {
     const probe = await run(candidate, ['--version'], 15_000);
@@ -54,19 +90,47 @@ export async function recoverDbKey(platform: NodeJS.Platform, run: Runner = runF
   }
 
   let installed = false;
-  const present = await run(python, ['-c', 'import pyrekordbox'], 30_000);
-  if (present.code !== 0) {
-    const install = await run(python, ['-m', 'pip', 'install', '--quiet', '--user', 'pyrekordbox'], 300_000);
-    if (install.code !== 0) {
-      return {
-        ok: false, reason: 'install-failed',
-        detail: `pyrekordbox could not be installed: ${lastLine(install.stderr || install.stdout) || `pip exited with ${install.code}`}`,
-      };
+  let interpreter = python;
+  const has = async (py: string) => (await run(py, ['-c', 'import pyrekordbox'], 30_000)).code === 0;
+
+  if (!(await has(python))) {
+    const failures: string[] = [];
+    let ready = false;
+
+    if (venvDir) {
+      const inVenv = venvPython(venvDir, platform);
+      if (await has(inVenv)) {
+        interpreter = inVenv;
+        ready = true;
+      } else {
+        const created = await run(python, ['-m', 'venv', venvDir], 120_000);
+        const install = created.code === 0
+          ? await run(inVenv, ['-m', 'pip', 'install', '--quiet', 'pyrekordbox'], 300_000)
+          : created;
+        if (install.code === 0) {
+          interpreter = inVenv;
+          ready = installed = true;
+        } else {
+          failures.push(`a private environment: ${reasonFrom(`${install.stderr}\n${install.stdout}`) || `exit ${install.code}`}`);
+        }
+      }
     }
-    installed = true;
+
+    if (!ready) {
+      const install = await run(python, ['-m', 'pip', 'install', '--quiet', '--user', 'pyrekordbox'], 300_000);
+      if (install.code === 0) {
+        ready = installed = true;
+      } else {
+        failures.push(`pip --user: ${reasonFrom(`${install.stderr}\n${install.stdout}`) || `exit ${install.code}`}`);
+      }
+    }
+
+    if (!ready) {
+      return { ok: false, reason: 'install-failed', detail: `pyrekordbox could not be installed — ${failures.join('; ')}` };
+    }
   }
 
-  const printed = await run(python, ['-c', PYREKORDBOX_KEY_ONE_LINER], 60_000);
+  const printed = await run(interpreter, ['-c', PYREKORDBOX_KEY_ONE_LINER], 60_000);
   const key = lastLine(printed.stdout);
   if (printed.code !== 0 || !/^[0-9a-f]{64}$/i.test(key)) {
     return {
@@ -74,7 +138,7 @@ export async function recoverDbKey(platform: NodeJS.Platform, run: Runner = runF
       detail: `pyrekordbox did not print a key: ${lastLine(printed.stderr) || key || `exit ${printed.code}`}`,
     };
   }
-  return { ok: true, key: key.toLowerCase(), python, installed };
+  return { ok: true, key: key.toLowerCase(), python: interpreter, installed };
 }
 
 function runFile(command: string, args: string[], timeoutMs: number): Promise<RunResult> {
@@ -86,7 +150,11 @@ function runFile(command: string, args: string[], timeoutMs: number): Promise<Ru
       (error, stdout, stderr) => {
         const code = error ? (typeof (error as NodeJS.ErrnoException & { code?: unknown }).code === 'number'
           ? (error as unknown as { code: number }).code : 1) : 0;
-        resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') || (error?.message ?? '') });
+        // Python's venv explains a failure on stdout, so the process's own output
+        // comes before the generic "Command failed" of the error.
+        const out = String(stdout ?? '');
+        const err = String(stderr ?? '');
+        resolve({ code, stdout: out, stderr: err || (out.trim() ? '' : (error?.message ?? '')) });
       }
     );
   });

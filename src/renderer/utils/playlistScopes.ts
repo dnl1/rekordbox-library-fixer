@@ -1,7 +1,11 @@
 import type { Playlist } from '../types';
 
 export interface PlaylistScope {
-  /** Stable within one library: the path of names from the root. */
+  /**
+   * The node's position in the tree — `0/2/1` — not its names: rekordbox lets
+   * two playlists in one folder share a name, and a key made of names picked
+   * the first of them whichever was chosen.
+   */
   key: string;
   /** `Gigs / Friday` — the folder path, so two playlists named alike are told apart. */
   label: string;
@@ -22,31 +26,24 @@ export interface PlaylistScope {
 export function playlistScopes(playlists: Playlist[]): PlaylistScope[] {
   const scopes: PlaylistScope[] = [];
 
-  const walk = (nodes: Playlist[], trail: string[]): string[] => {
+  // Pre-order, so a folder is listed before what is in it; its tracks are only
+  // known once its children are walked, so its slot is kept and filled after.
+  const walk = (nodes: Playlist[], names: string[], position: number[]): string[] => {
     const underHere: string[] = [];
-    for (const node of nodes) {
-      const path = [...trail, node.name];
+    nodes.forEach((node, index) => {
+      const at = [...position, index];
+      const label = [...names, node.name];
+      const slot = scopes.length;
+      scopes.push(null as unknown as PlaylistScope);
       const own = node.type === 'FOLDER' ? [] : (node.tracks ?? []);
-      const beneath = node.children?.length ? walk(node.children, path) : [];
+      const beneath = node.children?.length ? walk(node.children, label, at) : [];
       const trackIds = [...new Set([...own, ...beneath])];
-      if (trackIds.length > 0) {
-        scopes.push({ key: path.join('\u0000'), label: path.join(' / '), isFolder: node.type === 'FOLDER', trackIds });
-      }
+      scopes[slot] = { key: at.join('/'), label: label.join(' / '), isFolder: node.type === 'FOLDER', trackIds };
       underHere.push(...trackIds);
-    }
+    });
     return underHere;
   };
 
-  walk(playlists, []);
-  // A parent is pushed after its children by the walk; show it first.
-  const order = new Map<string, number>();
-  const visit = (nodes: Playlist[], trail: string[]) => {
-    for (const node of nodes) {
-      const path = [...trail, node.name];
-      order.set(path.join('\u0000'), order.size);
-      if (node.children?.length) { visit(node.children, path); }
-    }
-  };
-  visit(playlists, []);
-  return scopes.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
+  walk(playlists, [], []);
+  return scopes.filter((scope) => scope.trackIds.length > 0);
 }

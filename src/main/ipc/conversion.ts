@@ -141,6 +141,18 @@ export function registerConversionIpc(): void {
       let writeSkipped: Array<{ trackId: string; reason: string }> = [];
       let backupPath: string | undefined;
 
+      // rekordbox may have been opened while the run went on. The write would
+      // refuse and the failure below would delete every file this run made —
+      // an hour of converting lost — when a second run can reuse them all.
+      if (writePlans.length > 0 && isDatabase && isRekordboxRunning()) {
+        return {
+          success: false,
+          error: 'rekordbox was opened while converting, so nothing was written into its database. '
+            + `The ${result.converted.length} finished files are kept: close rekordbox and convert again, `
+            + 'and each is checked against its FLAC and reused.',
+        };
+      }
+
       if (writePlans.length > 0) {
         backupPath = `${libraryPath}.backup.${stamp()}`;
         try {
@@ -178,7 +190,10 @@ export function registerConversionIpc(): void {
 
       const trashed: string[] = [];
       const trashFailed: Array<{ file: string; error: string }> = [];
-      if (trashOriginals) {
+      // Only a database write moves rekordbox's own entries. An XML library is a
+      // file rekordbox does not read by itself: its master.db still points at
+      // every FLAC, so trashing them would leave the real collection missing.
+      if (trashOriginals && isDatabase) {
         for (const original of settlement.trashable) {
           try {
             // The trash, never unlink: a wrong call stays recoverable.

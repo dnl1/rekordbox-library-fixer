@@ -151,12 +151,22 @@ describe('ConvertFlacPanel', () => {
     // The whole library travels too: an original is trashed only if nothing else uses it.
     context.libraryData = { ...library(['/m/a.flac', '/m/b.flac']), playlists: [{ name: 'USB', type: 'PLAYLIST', tracks: ['1'] }] };
     render(<ConvertFlacPanel />);
-    fireEvent.change(screen.getByLabelText('Convert'), { target: { value: 'USB' } });
+    fireEvent.change(screen.getByLabelText('Convert'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() => expect(api().convertFlacPreview).toHaveBeenCalled());
     const sent = api().convertFlacPreview.mock.calls.at(-1)[0];
     expect(sent.scopeTrackIds).toEqual(['1']);
     expect(sent.tracks).toHaveLength(2);
+  });
+
+  it('does not offer the trash for an XML library', () => {
+    // rekordbox's own database still points at the FLACs after an XML conversion.
+    context.libraryPath = '/x/collection.xml';
+    render(<ConvertFlacPanel />);
+    const box = screen.getByLabelText(/Move the FLAC originals/) as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(box.checked).toBe(false);
+    expect(screen.getByText(/after an XML conversion, rekordbox still/)).toBeTruthy();
   });
 
   it('offers the whole library by default', () => {

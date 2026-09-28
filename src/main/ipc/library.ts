@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { ipcMain, dialog } from 'electron';
+import { app, ipcMain, dialog } from 'electron';
 import { runtime } from '../runtime';
 import { detectRekordboxDb } from '../rekordboxDbLocator';
 import { scanForLibraries } from '../libraryScanner';
@@ -92,7 +92,9 @@ export function registerLibraryIpc(): void {
   ipcMain.handle('scan-for-libraries', async () => scanForLibraries());
 
   ipcMain.handle('recover-db-key', async (): Promise<IpcResult<RecoveredDbKey>> => {
-    const outcome = await recoverDbKey(process.platform);
+    // pyrekordbox goes into an environment of the app's own if the machine's
+    // Python lacks it, so the user's packages are left alone.
+    const outcome = await recoverDbKey(process.platform, undefined, path.join(app.getPath('userData'), 'pyrekordbox'));
     return outcome.ok
       ? { success: true, data: { key: outcome.key, installed: outcome.installed } }
       : { success: false, error: outcome.detail };

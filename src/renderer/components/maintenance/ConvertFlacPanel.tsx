@@ -100,7 +100,7 @@ export const ConvertFlacPanel: React.FC = () => {
       libraryPath,
       dbKey: isDatabase ? useSettingsStore.getState().rekordboxDbKey : undefined,
       format,
-      trashOriginals,
+      trashOriginals: trashOriginals && isDatabase,
     });
 
     if (!res.success || !res.data) {
@@ -188,14 +188,20 @@ export const ConvertFlacPanel: React.FC = () => {
               <input
                 id="convert-trash-originals"
                 type="checkbox"
-                checked={trashOriginals}
-                disabled={phase === 'running'}
+                checked={trashOriginals && isDatabase}
+                disabled={phase === 'running' || !isDatabase}
                 onChange={(e) => setTrashOriginals(e.target.checked)}
                 className="accent-te-orange"
               />
               <span className="text-sm text-te-grey-700">Move the FLAC originals to the trash afterwards</span>
             </label>
-            {trashOriginals && format === 'mp3' && (
+            {!isDatabase && (
+              <p className="text-xs font-te-mono text-te-grey-400 mt-1 ml-6">
+                Only when converting rekordbox&apos;s own database: after an XML conversion, rekordbox still
+                points at the FLACs.
+              </p>
+            )}
+            {trashOriginals && isDatabase && format === 'mp3' && (
               <p className="text-xs font-te-mono text-te-amber-600 mt-1 ml-6">
                 <AlertTriangle size={12} className="inline mr-1" />
                 MP3 is lossy: once the trash is emptied, the FLAC was the only lossless copy.
@@ -246,7 +252,7 @@ export const ConvertFlacPanel: React.FC = () => {
           {phase === 'confirming' && (
             <p className="text-xs font-te-mono text-te-grey-700">
               Converts {preview?.files} files and re-points their entries. Nothing is overwritten, and
-              {trashOriginals ? ' each original goes to the trash only once the library points at its conversion.' : ' the originals are kept.'}
+              {trashOriginals && isDatabase ? ' each original goes to the trash only once the library points at its conversion.' : ' the originals are kept.'}
               {isDatabase ? ' This is written into the rekordbox database, so rekordbox must stay closed.' : ''}
               {' '}A backup is saved first, and you can undo the library change from the Backups tab.
             </p>

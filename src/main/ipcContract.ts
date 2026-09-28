@@ -190,7 +190,11 @@ export interface ConvertFlacRequest {
   /** Required when `libraryPath` is a master.db. */
   dbKey?: string;
   format: ConversionFormatPayload;
-  /** Move each original to the trash once every entry points at its conversion. */
+  /**
+   * Move each original to the trash once every entry points at its conversion.
+   * Honoured for master.db only: after an XML conversion rekordbox's own
+   * database still points at the FLACs.
+   */
   trashOriginals: boolean;
 }
 

@@ -26,6 +26,14 @@ describe('playlistScopes', () => {
     expect(new Set(sets.map((s) => s.key)).size).toBe(2);
   });
 
+  it('keeps two playlists of the same name in one folder apart', () => {
+    // rekordbox allows it; a key made of names picked the first whichever was chosen.
+    const scopes = playlistScopes([folder('Gigs', [pl('Friday', ['1']), pl('Friday', ['2'])])]);
+    const fridays = scopes.filter((s) => s.label === 'Gigs / Friday');
+    expect(fridays.map((s) => s.trackIds)).toEqual([['1'], ['2']]);
+    expect(new Set(fridays.map((s) => s.key)).size).toBe(2);
+  });
+
   it('leaves out what is empty', () => {
     expect(playlistScopes([pl('Empty', []), folder('Nothing', [pl('Empty too', [])])])).toEqual([]);
   });
