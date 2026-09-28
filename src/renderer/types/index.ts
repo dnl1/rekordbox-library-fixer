@@ -199,7 +199,7 @@ declare global {
       /** Reads the key out of the pyrekordbox package and checks it opens `dbPath`. */
       recoverDbKey: (dbPath?: string) => Promise<IpcResult<RecoveredDbKey>>;
       showSystemNotification?: (data: { type: string; message: string }) => Promise<{ success: boolean }>;
-      mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: Array<{ keepId: string; removeIds: string[] }> }) => Promise<{ success: boolean; entriesRemoved?: number; playlistLinksMoved?: number; backupPath?: string; error?: string }>;
+      mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: Array<{ keepId: string; removeIds: string[] }>; deleteFromDisk?: boolean }) => Promise<{ success: boolean; entriesRemoved?: number; playlistLinksMoved?: number; backupPath?: string; filesDeleted?: number; trashedPaths?: string[]; deleteErrors?: Array<{ file: string; error: string }>; skipped?: Array<{ keepId: string; reason: string }>; error?: string }>;
       findBrokenEntries: (args: { tracks: any[]; includeMissing?: boolean }) => Promise<{ success: boolean; data?: Array<{ trackId: string; name: string; artist: string; location: string; reason: string }>; error?: string }>;
       removeBrokenEntries: (data: { libraryPath: string; trackIds: string[] }) => Promise<{ success: boolean; removed?: number; kept?: Array<{ trackId: string; reason: string }>; backupPath?: string; error?: string }>;
       removeEntriesInDb: (data: { dbPath: string; key: string; trackIds: string[] }) => Promise<{ success: boolean; entriesRemoved?: number; playlistLinksRemoved?: number; kept?: Array<{ trackId: string; reason: string }>; backupPath?: string; error?: string }>;
@@ -214,6 +214,7 @@ declare global {
         success: boolean;
         backupPath?: string;
         tracksRemoved?: number;
+        skipped?: Array<{ keepId: string; reason: string }>;
         filesDeleted?: number;
         deleteErrors?: { file: string; error: string }[];
         updatedLibrary?: any;

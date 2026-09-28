@@ -23,7 +23,7 @@ import { classifyDuplicateSet } from '../utils/classifyDuplicateSet';
 import { isStreamingTrack } from '../utils/streamingSource';
 
 const DuplicateDetector: React.FC = () => {
-  const { libraryData, libraryPath, showNotification, setLibraryData } = useAppContext();
+  const { libraryData, libraryPath, showNotification, setLibraryData, onLoadLibrary } = useAppContext();
 
   // How many playlists each track belongs to — shown in each duplicate row so
   // you can see a track's playlist reach before choosing which copy to keep.
@@ -283,7 +283,7 @@ const DuplicateDetector: React.FC = () => {
    * With a database-backed library, resolving edits rekordbox's own catalogue:
    * the XML format cannot remove tracks, so an export can never clean the
    * collection. Playlist links move to the kept entry and the extra entries are
-   * marked deleted; no audio file is touched.
+   * deleted; their files go to the trash only when that box is ticked.
    */
   const { resolveDuplicates, executeResolve } = useDuplicateResolution({
     duplicates,
@@ -300,6 +300,7 @@ const DuplicateDetector: React.FC = () => {
     setIsScanning,
     clearAll,
     setPendingDeletePaths,
+    onLoadLibrary,
   });
 
   // Memoize expensive calculations

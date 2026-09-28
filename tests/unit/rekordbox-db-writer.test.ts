@@ -14,10 +14,11 @@ beforeEach(() => {
   file = path.join(os.tmpdir(), `wr-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
   db = new Database(file);
   db.exec(`
-    CREATE TABLE djmdContent (ID TEXT PRIMARY KEY, Title TEXT, rb_local_deleted INTEGER DEFAULT 0);
+    CREATE TABLE djmdContent (ID TEXT PRIMARY KEY, Title TEXT, rb_local_deleted INTEGER DEFAULT 0, FolderPath TEXT);
     CREATE TABLE djmdSongPlaylist (
       ID TEXT PRIMARY KEY, PlaylistID TEXT, ContentID TEXT, rb_local_deleted INTEGER DEFAULT 0);
-    INSERT INTO djmdContent VALUES ('keep','Song',0), ('dup1','Song',0), ('dup2','Song',0);
+    -- dup2 shares the kept entry's file; dup1 is a genuine second copy
+    INSERT INTO djmdContent VALUES ('keep','Song',0,'/Music/song.mp3'), ('dup1','Song',0,'/Music/copy/song.mp3'), ('dup2','Song',0,'/Music/song.mp3');
     -- playlist A holds only the duplicate; playlist B holds both
     INSERT INTO djmdSongPlaylist VALUES ('l1','A','dup1',0);
     INSERT INTO djmdSongPlaylist VALUES ('l2','B','keep',0);
@@ -88,6 +89,22 @@ describe('applyMerges', () => {
     const before = links();
     applyMerges(db, []);
     expect(links()).toEqual(before);
+    expect(alive()).toHaveLength(3);
+  });
+
+  it('reports where the removed entries pointed and what the collection still uses', () => {
+    const result = applyMerges(db, [{ keepId: 'keep', removeIds: ['dup1', 'dup2'] }]);
+    expect(result.removedLocations).toEqual(['/Music/copy/song.mp3', '/Music/song.mp3']);
+    // The kept entry's file is still in use, so nothing may trash it.
+    expect(result.remainingLocations).toEqual(['/Music/song.mp3']);
+  });
+
+  it('leaves a set alone when the kept file is gone but a copy being retired is there', () => {
+    const onlyCopy = (p: string) => p === '/Music/copy/song.mp3';
+    const result = applyMerges(db, [{ keepId: 'keep', removeIds: ['dup1', 'dup2'] }], onlyCopy);
+    expect(result.entriesRemoved).toBe(0);
+    expect(result.removedLocations).toEqual([]);
+    expect(result.skipped).toEqual([{ keepId: 'keep', reason: expect.stringContaining('/Music/copy/song.mp3') }]);
     expect(alive()).toHaveLength(3);
   });
 });

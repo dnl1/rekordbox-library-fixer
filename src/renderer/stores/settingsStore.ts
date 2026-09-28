@@ -9,11 +9,17 @@ interface SettingsState {
   /** SQLCipher key for rekordbox master.db, pasted by the user. */
   rekordboxDbKey: string;
   relocationOptions: RelocationOptions;
+  /**
+   * Where Consolidate gathers the library. Remembered because resolving
+   * duplicates keeps the copy in this folder over any other.
+   */
+  consolidateDestination: string;
 
   // Actions
   setScanOptions: (options: ScanOptions) => void;
   setResolutionStrategy: (strategy: ResolutionStrategy) => void;
   setRekordboxDbKey: (key: string) => void;
+  setConsolidateDestination: (folder: string) => void;
   updateScanOption: <K extends keyof ScanOptions>(key: K, value: ScanOptions[K]) => void;
   addPathPreference: (path: string) => void;
   removePathPreference: (index: number) => void;
@@ -38,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       resolutionStrategy: 'keep-highest-quality',
       rekordboxDbKey: '',
+      consolidateDestination: '',
       relocationOptions: {
         searchPaths: [],
         searchDepth: 8,
@@ -58,6 +65,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       setRekordboxDbKey: (key) => set({ rekordboxDbKey: key }),
+
+      setConsolidateDestination: (folder) => set({ consolidateDestination: folder }),
 
       updateScanOption: (key, value) => {
         console.log(`🔧 Zustand: Updating scan option ${key}:`, value);

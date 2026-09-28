@@ -41,10 +41,13 @@ const DuplicateItem: React.FC<DuplicateItemProps> = memo(({
 
   const { openFileLocation } = useFileOperations();
   const preferLossless = useSettingsStore((state) => state.scanOptions.preferLossless);
+  const consolidateDestination = useSettingsStore((state) => state.consolidateDestination);
 
   const recommendedTrack = useMemo(
-    () => pickRecommendedTrack(duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless),
-    [duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless]
+    () => pickRecommendedTrack(
+      duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless, consolidateDestination
+    ),
+    [duplicate.tracks, resolutionStrategy, duplicate.pathPreferences, preferLossless, consolidateDestination]
   );
 
 

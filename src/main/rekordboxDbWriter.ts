@@ -4,6 +4,7 @@ import { unlockDatabase } from './rekordboxDbParser';
 import { backupDatabaseFile } from './backupDatabase';
 import { isRekordboxRunning } from './rekordboxRunning';
 import { isStreamingLocation } from './brokenEntries';
+import { isHostFile, keeperProblem } from './keeperGuard';
 
 type Db = InstanceType<typeof Database>;
 
@@ -17,6 +18,12 @@ export interface MergeOutcome {
   entriesRemoved: number;
   playlistLinksMoved: number;
   backupPath: string;
+  /** Where the removed entries pointed, so their files can be trashed if asked. */
+  removedLocations: string[];
+  /** Every location still in the collection after the merge — those files must stay. */
+  remainingLocations: string[];
+  /** Sets left untouched because merging them could lose the only audio file. */
+  skipped: Array<{ keepId: string; reason: string }>;
 }
 
 /**
@@ -33,13 +40,14 @@ export interface MergeOutcome {
  * either orphan them or require touching all of them. Marking leaves every
  * relation intact and can be undone by restoring the backup.
  *
- * No audio file is touched. This only edits rekordbox's catalogue.
+ * No audio file is touched here. This only edits rekordbox's catalogue; the
+ * caller trashes files, if asked, from what the outcome says was removed.
  */
 export function mergeDuplicateEntries(
   dbPath: string,
   key: string,
   plans: MergePlan[],
-  options: { backupPath: string; checkRunning?: () => boolean } = { backupPath: '' }
+  options: { backupPath: string; checkRunning?: () => boolean; isFile?: (p: string) => boolean } = { backupPath: '' }
 ): MergeOutcome {
   const running = options.checkRunning ?? isRekordboxRunning;
   if (running()) {
@@ -56,7 +64,7 @@ export function mergeDuplicateEntries(
   try {
     db = new Database(dbPath);
     unlockDatabase(db, key);
-    return applyMerges(db, plans);
+    return applyMerges(db, plans, options.isFile ?? isHostFile);
   } finally {
     if (db) { db.close(); }
   }
@@ -92,7 +100,12 @@ function bumpUpdateCount(db: Db, by: number): void {
  * tracks visible in rekordbox, which is the whole point of the exercise.
  * pyrekordbox deletes for the same reason and keeps the update counter in step.
  */
-export function applyMerges(db: Db, plans: MergePlan[]): MergeOutcome {
+export function applyMerges(
+  db: Db,
+  plans: MergePlan[],
+  /** Checks a stored location is a file; the default trusts every one. */
+  isFile: (p: string) => boolean = () => true
+): MergeOutcome {
   const movePlaylistLink = db.prepare(`
     UPDATE djmdSongPlaylist SET ContentID = ?
     WHERE ContentID = ?
@@ -102,6 +115,7 @@ export function applyMerges(db: Db, plans: MergePlan[]): MergeOutcome {
   `);
   const dropRemainingLinks = db.prepare('DELETE FROM djmdSongPlaylist WHERE ContentID = ?');
   const deleteContent = db.prepare('DELETE FROM djmdContent WHERE ID = ?');
+  const readLocation = db.prepare('SELECT FolderPath AS path FROM djmdContent WHERE ID = ?');
 
   const dependentDeletes = CONTENT_TABLES
     .filter((table) => table !== 'djmdSongPlaylist')
@@ -113,24 +127,40 @@ export function applyMerges(db: Db, plans: MergePlan[]): MergeOutcome {
 
   let entriesRemoved = 0;
   let playlistLinksMoved = 0;
+  const removedLocations: string[] = [];
+  const skipped: Array<{ keepId: string; reason: string }> = [];
+  const locationOf = (id: string) => (readLocation.get(id) as { path?: string } | undefined)?.path;
 
   const run = db.transaction((allPlans: MergePlan[]) => {
     for (const plan of allPlans) {
+      const problem = keeperProblem(
+        locationOf(plan.keepId),
+        plan.removeIds.filter((id) => id !== plan.keepId).map(locationOf),
+        isFile
+      );
+      if (problem) { skipped.push({ keepId: plan.keepId, reason: problem }); continue; }
       for (const removeId of plan.removeIds) {
         if (removeId === plan.keepId) { continue; }
+        const location = locationOf(removeId);
         // Playlists holding only this copy follow the kept entry; the rest
         // would duplicate an existing link, so they go.
         playlistLinksMoved += movePlaylistLink.run(plan.keepId, removeId, plan.keepId).changes;
         dropRemainingLinks.run(removeId);
         for (const stmt of dependentDeletes) { stmt.run(removeId); }
-        entriesRemoved += deleteContent.run(removeId).changes;
+        const removed = deleteContent.run(removeId).changes;
+        entriesRemoved += removed;
+        if (removed > 0 && location) { removedLocations.push(location); }
       }
     }
     bumpUpdateCount(db, entriesRemoved + playlistLinksMoved);
   });
   run(plans);
 
-  return { entriesRemoved, playlistLinksMoved, backupPath: '' };
+  const remainingLocations = (db.prepare('SELECT FolderPath AS path FROM djmdContent').all() as Array<{ path?: string }>)
+    .map((row) => row.path ?? '')
+    .filter((loc) => loc.length > 0);
+
+  return { entriesRemoved, playlistLinksMoved, backupPath: '', removedLocations, remainingLocations, skipped };
 }
 
 export interface RemovalOutcome {

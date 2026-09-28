@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { FolderOpen, Play, X, CheckCircle, AlertCircle, SkipForward } from 'lucide-react';
 import { formatFileSize } from '../../utils';
 import type { TrackPayload } from '../../../main/ipcContract';
@@ -26,7 +27,8 @@ interface ConsolidatePanelProps {
 export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
   tracks, libraryPath, hasLibrary,
 }) => {
-  const [destination, setDestination] = useState('');
+  const destination = useSettingsStore((s) => s.consolidateDestination);
+  const setDestination = useSettingsStore((s) => s.setConsolidateDestination);
   const [mode, setMode] = useState<Mode>('copy');
   const [conflictResolution, setConflictResolution] = useState<ConflictResolution>('skip');
   const [preferLossless, setPreferLossless] = useState(false);

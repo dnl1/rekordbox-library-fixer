@@ -114,7 +114,8 @@ collection has to go through the database.
   which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
   `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's
   own spelling, derived from the stored path rather than rebuilt with `path.join`. Used by the FLAC
-  conversion; the relocator, broken-entry check, player and fingerprinting do not use it yet.
+  conversion and by duplicate resolution (the keeper check and trashing); the relocator, broken-entry
+  check, player and fingerprinting do not use it yet.
 - **Reopening a library** (`openLibrary` in `src/renderer/hooks/useLibrary.ts`): the context's
   `onLoadLibrary` picks the database reader for a `.db` path and the XML parser otherwise. It used to be
   the XML loader alone, so every reopen after a database write closed the library instead.
@@ -137,6 +138,17 @@ collection has to go through the database.
 - **Duplicate kinds** (`src/renderer/utils/classifyDuplicateSet.ts`): distinguishes several
   entries pointing at one file from genuinely duplicated files, which decides whether
   resolving can free disk space.
+- **Which copy is kept** (`src/renderer/utils/pickRecommendedTrack.ts`): the renderer alone picks the keeper
+  of a duplicate set, and sends `{ keepId, removeIds }` plans to both the XML and the database write, so the
+  copy badged in the list and the files listed in the delete modal are exactly what happens. A copy inside the
+  Consolidate destination (`consolidateDestination`, persisted in the settings store) always beats one outside
+  it; the strategy decides among the copies inside.
+  "Highest quality" ranks by `qualityTier` (`src/main/audioQuality.ts`, pure so the renderer imports it too;
+  Consolidate's "Use quality score" uses the same): AIFF, then WAV (and FLAC when preferred), then lossy —
+  AIFF over WAV because WAV carries almost no tags or artwork. Bitrate, sample rate and size only break ties.
+  Before merging, the main process re-checks each set (`src/main/keeperGuard.ts`): if the kept copy's file is
+  not there — the consolidate drive unplugged — while a retired copy's file is, the set is left untouched and
+  reported as `skipped`, so a merge never points a song at nothing and trashing never takes the only file.
 - **Activity history** (`src/renderer/db/duplicationHistoryDb.ts`): its own Dexie database,
   separate from the relocation history, recording one entry per library-changing operation
   with per-item detail. Surfaced by the History tab.
@@ -271,7 +283,9 @@ exposed through `window.electronAPI`:
   FLAC conversion, writing into `master.db` or the XML depending on what is open
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with
   `dbKey`) / `removeEntriesInDb(data)`: the database-native writes, each requiring rekordbox to be closed
-  and taking a backup first
+  and taking a backup first. `mergeDuplicatesInDb` with `deleteFromDisk` also trashes the removed copies'
+  files — after the write, and only a file no entry left in the collection still uses; the page then
+  reopens the library, or the merged entries stay listed and a rescan finds them again
 
 ## State Management Architecture
 

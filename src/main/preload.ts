@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recoverDbKey: (dbPath?: string) => ipcRenderer.invoke('recover-db-key', dbPath),
   showSystemNotification: (data: { type: string; message: string }) =>
     ipcRenderer.invoke('show-system-notification', data),
-  mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: MergePlanPayload[] }) =>
+  mergeDuplicatesInDb: (data: { dbPath: string; key: string; plans: MergePlanPayload[]; deleteFromDisk?: boolean }) =>
     ipcRenderer.invoke('merge-duplicates-in-db', data),
   findBrokenEntries: (args: { tracks: TrackPayload[]; includeMissing?: boolean }) =>
     ipcRenderer.invoke('find-broken-entries', args),
@@ -49,10 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   resolveDuplicates: (resolution: {
     libraryPath: string;
-    duplicates: DuplicateSet[];
-    strategy: string;
-    pathPreferences?: string[];
-    preferLossless?: boolean;
+    plans: MergePlanPayload[];
     deleteFromDisk?: boolean;
   }) =>
     ipcRenderer.invoke('resolve-duplicates', resolution),

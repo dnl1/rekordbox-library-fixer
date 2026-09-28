@@ -84,8 +84,9 @@ vi.mock('../../src/renderer/hooks/useTrackRelocator', () => ({
   })
 }));
 
-vi.mock('../../src/renderer/stores/settingsStore', () => ({
-  useSettingsStore: () => ({
+vi.mock('../../src/renderer/stores/settingsStore', () => {
+  const state = {
+    consolidateDestination: '',
     scanOptions: {
       useFingerprint: true,
       useMetadata: false,
@@ -105,8 +106,10 @@ vi.mock('../../src/renderer/stores/settingsStore', () => ({
     },
     addRelocationSearchPath: vi.fn(),
     removeRelocationSearchPath: vi.fn()
-  })
-}));
+  };
+  // Components select one field; hand back what they asked for.
+  return { useSettingsStore: (select?: (s: typeof state) => unknown) => (select ? select(state) : state) };
+});
 
 // Mock window.electronAPI if it doesn't exist
 if (!window.electronAPI) {

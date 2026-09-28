@@ -1,9 +1,13 @@
-const ext = (loc: string) => {
-  const i = (loc || '').lastIndexOf('.');
-  return i === -1 ? '' : loc.slice(i).toLowerCase();
-};
-const isUniversalLossless = (loc: string) => ['.wav', '.aiff', '.aif'].includes(ext(loc));
-const isFlac = (loc: string) => ext(loc) === '.flac';
+import { qualityTier } from '../../main/audioQuality';
+
+const comparable = (p: string) =>
+  (p || '').normalize('NFC').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+
+/** Whether a file lies inside a folder, at any depth. */
+export function isInsideFolder(location: string, folder: string): boolean {
+  const f = comparable(folder);
+  return f.length > 0 && comparable(location).startsWith(`${f}/`);
+}
 
 /**
  * Which copy of a duplicate set the current strategy would keep.
@@ -11,22 +15,31 @@ const isFlac = (loc: string) => ext(loc) === '.flac';
  * delete-confirmation modal (to list only the copies that will be trashed),
  * so both agree on the winner. Mirrors the main process's resolution rules.
  * Returns null for the 'manual' strategy, where the user picks.
+ *
+ * A copy inside `preferredFolder` (the Consolidate destination) always wins
+ * over one outside it: that folder is where the library is being gathered, so
+ * keeping a copy elsewhere would undo the consolidation. The strategy then
+ * decides among the copies inside it.
  */
 export function pickRecommendedTrack(
   tracks: any[],
   resolutionStrategy: string,
   pathPreferences: string[] = [],
-  preferLossless = false
+  preferLossless = false,
+  preferredFolder = ''
 ): any | null {
   if (resolutionStrategy === 'manual' || !tracks || tracks.length === 0) { return null; }
 
+  const inFolder = preferredFolder
+    ? tracks.filter((t: any) => isInsideFolder(t.location || '', preferredFolder))
+    : [];
+  if (inFolder.length > 0 && inFolder.length < tracks.length) {
+    return pickRecommendedTrack(inFolder, resolutionStrategy, pathPreferences, preferLossless);
+  }
+
   if (resolutionStrategy === 'keep-highest-quality') {
     const qualityScore = (t: any) => (t.bitrate || 0) + (t.size || 0) / 1000000;
-    const tier = (t: any) => {
-      if (isUniversalLossless(t.location || '')) { return 2; }
-      if (preferLossless && isFlac(t.location || '')) { return 2; }
-      return 0;
-    };
+    const tier = (t: any) => qualityTier(t.location || '', preferLossless);
     return tracks.reduce((best: any, current: any) => {
       const bt = tier(best); const ct = tier(current);
       if (ct > bt) { return current; }

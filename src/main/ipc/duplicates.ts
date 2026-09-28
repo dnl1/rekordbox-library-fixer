@@ -3,9 +3,10 @@ import { runtime, safeConsole, sendToWindow } from '../runtime';
 import { substitutePlaylistTrackIds } from '../playlistSubstitution';
 import { computeDeletablePaths } from '../safeDeletePaths';
 import { mergeDuplicateEntries, type MergePlan } from '../rekordboxDbWriter';
+import { isHostFile, keeperProblem } from '../keeperGuard';
+import { hostEnvironment, toHostPath } from '../hostPath';
 import { assertWritableLibraryPath } from '../librarySource';
-import type { TrackPayload, DuplicateSet } from '../ipcContract';
-import { isLossless } from '../audioQuality';
+import type { TrackPayload } from '../ipcContract';
 import { shell } from 'electron';
 
 /** Scans in flight, so a cancel request can reach the one it names. */
@@ -69,13 +70,27 @@ export function registerDuplicateIpc(): void {
   });
 
   ipcMain.handle('merge-duplicates-in-db', async (_e, data: {
-    dbPath: string; key: string; plans: MergePlan[];
+    dbPath: string; key: string; plans: MergePlan[]; deleteFromDisk?: boolean;
   }) => {
     try {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupPath = `${data.dbPath}.backup.${stamp}`;
-      const outcome = mergeDuplicateEntries(data.dbPath, data.key, data.plans, { backupPath });
-      return { success: true, ...outcome, backupPath };
+      const { removedLocations, remainingLocations, skipped, ...outcome } =
+        mergeDuplicateEntries(data.dbPath, data.key, data.plans, { backupPath });
+      // Files go only after the database write has succeeded, and only those
+      // no entry left in the collection still uses.
+      const trash = data.deleteFromDisk
+        ? await trashUnreferencedFiles(removedLocations, remainingLocations)
+        : { deleted: 0, trashed: [], failed: [] };
+      return {
+        success: true,
+        ...outcome,
+        backupPath,
+        skipped,
+        filesDeleted: trash.deleted,
+        trashedPaths: trash.trashed,
+        deleteErrors: trash.failed,
+      };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
@@ -92,13 +107,11 @@ export function registerDuplicateIpc(): void {
 
   ipcMain.handle('resolve-duplicates', async (_, resolution: {
     libraryPath: string;
-    duplicates: DuplicateSet[];
-    strategy: 'keep-highest-quality' | 'keep-newest' | 'keep-oldest' | 'keep-preferred-path' | 'manual';
-    pathPreferences: string[];
-    preferLossless?: boolean;
+    /** Which entry each set keeps — chosen by the renderer, which also showed it. */
+    plans: MergePlan[];
     deleteFromDisk?: boolean;
   }) => {
-    safeConsole.log(`🔧 IPC: Resolving ${resolution.duplicates.length} duplicate sets`);
+    safeConsole.log(`🔧 IPC: Resolving ${resolution.plans.length} duplicate sets`);
     try {
       // Step 1: Create backup of original XML
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -114,69 +127,31 @@ export function registerDuplicateIpc(): void {
       // Step 2: Parse current library
       const library = await runtime().rekordboxParser.parseLibrary(resolution.libraryPath);
 
-      // Step 3: Determine which tracks to remove for each duplicate set
+      // Step 3: The entries to retire. The keeper was chosen in the renderer, so
+      // the copy you saw marked and confirmed in the delete list is the one kept.
       const tracksToRemove: string[] = [];
       // removedTrackId -> keptTrackId, so playlist references can be re-pointed
       // (not dropped) and playlists stay complete.
       const replacement = new Map<string, string>();
+      const skipped: Array<{ keepId: string; reason: string }> = [];
 
-      for (const duplicateSet of resolution.duplicates) {
-        const tracksInSet = duplicateSet.tracks;
-        let trackToKeep;
-
-        // Apply resolution strategy
-        if (resolution.strategy === 'keep-highest-quality') {
-          const qualityScore = (t: TrackPayload) => (t.bitrate || 0) + (t.size || 0) / 1000000;
-          trackToKeep = tracksInSet.reduce((best: TrackPayload, current: TrackPayload) => {
-            if (resolution.preferLossless) {
-              const bestLossless = isLossless(best.location || '');
-              const currentLossless = isLossless(current.location || '');
-              if (currentLossless && !bestLossless) {return current;}
-              if (!currentLossless && bestLossless) {return best;}
-            }
-            return qualityScore(current) > qualityScore(best) ? current : best;
-          });
-        } else if (resolution.strategy === 'keep-newest') {
-          trackToKeep = tracksInSet.reduce((newest: TrackPayload, current: TrackPayload) => {
-            if (!newest.dateModified) {return current;}
-            if (!current.dateModified) {return newest;}
-            return new Date(current.dateModified) > new Date(newest.dateModified) ? current : newest;
-          });
-        } else if (resolution.strategy === 'keep-oldest') {
-          trackToKeep = tracksInSet.reduce((oldest: TrackPayload, current: TrackPayload) => {
-            if (!oldest.dateAdded) {return current;}
-            if (!current.dateAdded) {return oldest;}
-            return new Date(current.dateAdded) < new Date(oldest.dateAdded) ? current : oldest;
-          });
-        } else if (resolution.strategy === 'keep-preferred-path') {
-          // Sort by path preference
-          const sortedTracks = [...tracksInSet].sort((a: TrackPayload, b: TrackPayload) => {
-            const aMatch = resolution.pathPreferences.findIndex((pref: string) =>
-              a.location && a.location.toLowerCase().includes(pref.toLowerCase())
-            );
-            const bMatch = resolution.pathPreferences.findIndex((pref: string) =>
-              b.location && b.location.toLowerCase().includes(pref.toLowerCase())
-            );
-
-            if (aMatch !== -1 && bMatch !== -1) {return aMatch - bMatch;}
-            if (aMatch !== -1) {return -1;}
-            if (bMatch !== -1) {return 1;}
-            return 0;
-          });
-          trackToKeep = sortedTracks[0];
-        } else {
-          // Default: keep first track
-          trackToKeep = tracksInSet[0];
+      for (const plan of resolution.plans) {
+        // A keeper that is not in the library would leave the set with nothing.
+        if (!library.tracks.has(plan.keepId)) {
+          skipped.push({ keepId: plan.keepId, reason: 'the kept entry is no longer in the library' });
+          continue;
         }
-
-        // Add all other tracks to removal list
-        const tracksToRemoveFromSet = tracksInSet
-          .filter((track: TrackPayload) => track.id !== trackToKeep.id);
-
-        tracksToRemove.push(...tracksToRemoveFromSet.map((t: TrackPayload) => t.id));
-        tracksToRemoveFromSet.forEach((t: TrackPayload) => replacement.set(t.id, trackToKeep.id));
-
-        safeConsole.log(`🎵 Duplicate set: keeping "${trackToKeep.name}" (${trackToKeep.location}), removing ${tracksToRemoveFromSet.length} others`);
+        const problem = keeperProblem(
+          library.tracks.get(plan.keepId)?.location,
+          plan.removeIds.filter((id) => id !== plan.keepId).map((id) => library.tracks.get(id)?.location),
+          isHostFile
+        );
+        if (problem) { skipped.push({ keepId: plan.keepId, reason: problem }); continue; }
+        for (const removeId of plan.removeIds) {
+          if (removeId === plan.keepId || !library.tracks.has(removeId)) { continue; }
+          tracksToRemove.push(removeId);
+          replacement.set(removeId, plan.keepId);
+        }
       }
 
       // Step 4: Remove tracks from library
@@ -207,43 +182,17 @@ export function registerDuplicateIpc(): void {
       runtime().logger.logLibrarySaving(resolution.libraryPath, library.tracks.size);
 
       // Step 6 (optional): Delete files from disk.
-      // Several rekordbox entries can point at the SAME file. Only delete a path
-      // that no remaining track still references, or we would destroy the audio
-      // belonging to a track the user chose to keep.
       const remainingLocations = Array.from(library.tracks.values())
         .map((t) => (t as TrackPayload | undefined)?.location)
         .filter((loc): loc is string => typeof loc === 'string' && loc.length > 0);
-      const fsSync = require('fs');
-      const isRegularFile = (p: string) => {
-        try { return fsSync.statSync(p).isFile(); } catch { return false; }
-      };
-      const deletablePaths = computeDeletablePaths(locationsToDelete, remainingLocations, isRegularFile);
-      const skippedStillReferenced = locationsToDelete.length - deletablePaths.length;
-      if (skippedStillReferenced > 0) {
-        safeConsole.log(`🛡️ Skipped ${skippedStillReferenced} path(s) still referenced by kept tracks or duplicated in the delete list`);
-      }
-
-      const deleteResults = { deleted: 0, trashed: [] as string[], failed: [] as { file: string; error: string }[] };
-      if (resolution.deleteFromDisk && deletablePaths.length > 0) {
-        for (const loc of deletablePaths) {
-          try {
-            // Move to the OS trash rather than unlinking, so a wrong call is
-            // recoverable by the user instead of destroying audio permanently.
-            await shell.trashItem(loc);
-            deleteResults.deleted++;
-            deleteResults.trashed.push(loc);
-            safeConsole.log(`🗑️ Moved to trash: ${loc}`);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            deleteResults.failed.push({ file: loc, error: msg });
-            safeConsole.error(`❌ Failed to trash ${loc}: ${msg}`);
-          }
-        }
-      }
+      const deleteResults = resolution.deleteFromDisk
+        ? await trashUnreferencedFiles(locationsToDelete, remainingLocations)
+        : { deleted: 0, trashed: [] as string[], failed: [] as { file: string; error: string }[] };
 
       return {
         success: true,
         backupPath,
+        skipped,
         tracksRemoved: tracksToRemove.length,
         filesDeleted: deleteResults.deleted,
         trashedPaths: deleteResults.trashed,
@@ -254,8 +203,7 @@ export function registerDuplicateIpc(): void {
     } catch (error) {
       safeConsole.error('❌ Resolution failed:', error);
       runtime().logger.error('DUPLICATE_RESOLUTION_FAILED', {
-        strategy: resolution.strategy,
-        duplicateSetsCount: resolution.duplicates.length,
+        duplicateSetsCount: resolution.plans.length,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       });
       return {
@@ -265,3 +213,39 @@ export function registerDuplicateIpc(): void {
     }
   });
   }
+
+/**
+ * Move the files of retired entries to the OS trash.
+ *
+ * Several rekordbox entries can point at the SAME file. Only a path that no
+ * remaining track still references goes, or we would destroy the audio
+ * belonging to a track the user chose to keep. Trash rather than unlink, so a
+ * wrong call is recoverable.
+ */
+async function trashUnreferencedFiles(
+  candidates: string[],
+  remainingLocations: string[]
+): Promise<{ deleted: number; trashed: string[]; failed: { file: string; error: string }[] }> {
+  // Compared in the library's spelling; under WSL the file itself is reached at /mnt/….
+  const deletablePaths = computeDeletablePaths(candidates, remainingLocations, isHostFile);
+  const env = hostEnvironment();
+  const skipped = candidates.length - deletablePaths.length;
+  if (skipped > 0) {
+    safeConsole.log(`🛡️ Skipped ${skipped} path(s) still referenced by kept tracks, duplicated in the delete list, or not a file`);
+  }
+
+  const result = { deleted: 0, trashed: [] as string[], failed: [] as { file: string; error: string }[] };
+  for (const loc of deletablePaths) {
+    try {
+      await shell.trashItem(toHostPath(loc, env));
+      result.deleted++;
+      result.trashed.push(loc);
+      safeConsole.log(`🗑️ Moved to trash: ${loc}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      result.failed.push({ file: loc, error: msg });
+      safeConsole.error(`❌ Failed to trash ${loc}: ${msg}`);
+    }
+  }
+  return result;
+}
