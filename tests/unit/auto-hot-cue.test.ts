@@ -84,7 +84,11 @@ describe('parseAnalysis', () => {
 
 describe('phraseName', () => {
   it('names phrases by mood, as rekordbox shows them', () => {
-    expect([1, 2, 3, 5, 6].map((k) => phraseName(1, k))).toEqual(['Intro', 'Up', 'Down', 'Chorus', 'Outro']);
+    expect([1, 2, 3, 5, 6].map((k) => phraseName(1, k))).toEqual(['Intro', 'Up', 'Down', 'Drop', 'Outro']);
+  });
+
+  it('calls a high-mood chorus a drop, and keeps a song\'s chorus a chorus', () => {
+    expect(phraseName(1, 5)).toBe('Drop');
     expect(phraseName(2, 9)).toBe('Chorus');
     expect(phraseName(3, 4)).toBe('Verse 1');
     expect(phraseName(1, 4)).toBeNull();
@@ -109,7 +113,7 @@ describe('suggestHotCues', () => {
     expect(cues).toEqual([
       { slot: 0, kind: 1, name: 'Intro', ms: at(1) },
       { slot: 1, kind: 2, name: 'Up', ms: at(33) },
-      { slot: 2, kind: 3, name: 'Chorus', ms: at(65) },
+      { slot: 2, kind: 3, name: 'Drop', ms: at(65) },
       { slot: 3, kind: 5, name: 'Down', ms: at(97) },
       { slot: 4, kind: 6, name: 'Outro', ms: at(129) },
     ]);
@@ -117,7 +121,7 @@ describe('suggestHotCues', () => {
 
   it('counts a run of phrases of one kind as one section', () => {
     const cues = suggestHotCues(grid, analysis([[1, 1], [33, 5], [65, 5], [97, 5], [129, 3]]), { beatsBefore: 0 });
-    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Chorus', 'Down']);
+    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Drop', 'Down']);
   });
 
   it('places a cue a bar early when asked, but never before the first beat', () => {
@@ -133,7 +137,7 @@ describe('suggestHotCues', () => {
     phrases.push([beat, 6]);
     const cues = suggestHotCues(grid, analysis(phrases), { beatsBefore: 0 });
     expect(cues).toHaveLength(8);
-    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Chorus', 'Down', 'Chorus', 'Down', 'Chorus', 'Down', 'Outro']);
+    expect(cues.map((c) => c.name)).toEqual(['Intro', 'Drop', 'Down', 'Drop', 'Down', 'Drop', 'Down', 'Outro']);
     expect(cues.map((c) => c.kind)).toEqual([1, 2, 3, 5, 6, 7, 8, 9]);
     expect(cues.every((c, i) => i === 0 || c.ms > cues[i - 1].ms)).toBe(true);
   });

@@ -132,7 +132,7 @@ collection has to go through the database.
   hot cue at all (memory cues do not count and are kept). `anlzReader` reads `PQTZ` and `PSSI` out of the ANLZ
   files, unmasking `PSSI`; checked identical to pyrekordbox on a real library, and it reads nine files pyrekordbox
   cannot. One cue per section (a run of phrases of one kind), on the phrase or a bar before, named after it, A–H in
-  time order; with more than eight sections, intro and outro first, then drops and breakdowns, build-ups and verses
+  time order — a high-mood "Chorus" is named Drop, a mid/low one stays Chorus; with more than eight sections, intro and outro first, then drops and breakdowns, build-ups and verses
   last — keeping the first eight left most tracks with nothing cued in their second half. A grid that is not
   strictly increasing is refused (a real library has one that jumps back). The write re-checks each track still has
   no hot cue, with rekordbox closed and a backup first. No colours yet: how `Color`/`ColorTableIndex` map to

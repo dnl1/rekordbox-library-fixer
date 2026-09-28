@@ -20,7 +20,7 @@ export const formatCueTime = (ms: number): string => {
 
 /**
  * Hot cues from rekordbox's own phrase analysis, for tracks that have none:
- * one per section — Intro, Up, Down, Chorus, Outro — on A to H. Each track can
+ * one per section — Intro, Up, Drop, Down, Outro — on A to H. Each track can
  * be listened to at its cues and unticked before anything is written. The
  * rules live in `src/main/autoHotCue.ts`; the write in `rekordboxDbHotCues.ts`.
  */
@@ -111,7 +111,7 @@ export const AutoHotCuePanel: React.FC = () => {
     <div className="bg-white rounded-te shadow-sm p-te-md mt-te-md">
       <h3 className="font-semibold text-te-grey-800 mb-1">Auto hot cues</h3>
       <p className="text-sm text-te-grey-500 font-te-mono mb-te-md">
-        Puts a hot cue at the start of each section rekordbox found — Intro, Up, Down, Chorus, Outro — on
+        Puts a hot cue at the start of each section rekordbox found — Intro, Up, Drop, Down, Outro — on
         tracks with no hot cue at all. Memory cues stay as they are.
       </p>
 

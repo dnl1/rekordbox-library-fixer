@@ -4,7 +4,7 @@ import type { GridBeat, PhraseAnalysis } from './anlzReader';
  * Where auto hot cues go, from rekordbox's own phrase analysis.
  *
  * One cue at the start of each section — a run of phrases of one kind, so
- * three Chorus phrases in a row are one Chorus — named after it, in order,
+ * three Drop phrases in a row are one Drop — named after it, in order,
  * on hot cues A to H. Placed on the beat the phrase starts on, or a bar
  * before when asked: a cue a bar early gives time to bring the track in.
  *
@@ -21,12 +21,14 @@ export const MAX_HOT_CUES = 8;
 export const HOT_CUE_KINDS = [1, 2, 3, 5, 6, 7, 8, 9] as const;
 
 /**
- * Phrase names by mood, as rekordbox shows them. A high mood is what dance
- * music mostly gets; mid and low name verses, with low repeating each one
- * three times over.
+ * Phrase names by mood. A high mood is what dance music mostly gets, and
+ * there rekordbox's "Chorus" is the drop — so it is called one, as DJs and
+ * the cues already in real libraries (`DROP`) call it. Mid and low moods are
+ * songs with verses, where a chorus is a chorus; low repeats each verse name
+ * three times over, as rekordbox does.
  */
 const PHRASE_NAMES: Record<number, Record<number, string>> = {
-  1: { 1: 'Intro', 2: 'Up', 3: 'Down', 5: 'Chorus', 6: 'Outro' },
+  1: { 1: 'Intro', 2: 'Up', 3: 'Down', 5: 'Drop', 6: 'Outro' },
   2: { 1: 'Intro', 2: 'Verse 1', 3: 'Verse 2', 4: 'Verse 3', 5: 'Verse 4', 6: 'Verse 5', 7: 'Verse 6', 8: 'Bridge', 9: 'Chorus', 10: 'Outro' },
   3: { 1: 'Intro', 2: 'Verse 1', 3: 'Verse 1', 4: 'Verse 1', 5: 'Verse 2', 6: 'Verse 2', 7: 'Verse 2', 8: 'Bridge', 9: 'Chorus', 10: 'Outro' },
 };
@@ -58,14 +60,14 @@ export interface SuggestOptions {
 
 /**
  * Which sections to keep when a track has more than eight. The intro and the
- * outro are where a mix starts and ends; drops (Chorus) and breakdowns
+ * outro are where a mix starts and ends; drops, choruses and breakdowns
  * (Down, Bridge) are what a DJ jumps to; build-ups and verses come last.
  * Keeping simply the first eight left most tracks with nothing cued in their
  * second half — on a real library, 1072 of 1299 tracks have more.
  */
 const priority = (name: string): number => {
   if (name === 'Intro' || name === 'Outro') { return 0; }
-  if (name === 'Chorus' || name === 'Down' || name === 'Bridge') { return 1; }
+  if (name === 'Drop' || name === 'Chorus' || name === 'Down' || name === 'Bridge') { return 1; }
   return 2;
 };
 

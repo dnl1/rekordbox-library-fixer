@@ -258,7 +258,7 @@ export interface AutoHotCuePayload {
   slot: number;
   /** `djmdCue.Kind` for the slot — 1, 2, 3, 5, 6, 7, 8, 9. */
   kind: number;
-  /** The phrase it starts: Intro, Up, Down, Chorus, Outro… */
+  /** The phrase it starts: Intro, Up, Drop, Down, Outro… */
   name: string;
   ms: number;
 }
