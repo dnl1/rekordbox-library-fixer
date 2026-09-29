@@ -1,15 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0-beta.4] - 2026-09-28
 
 ### 🎉 New Features
 - **Clean up converted FLACs**: Maintenance → Clean up converted FLACs finds each FLAC left beside the AIFF or WAV the library now uses — a conversion run without "move the originals to the trash", or one made by another tool — and moves it to the trash. Only a FLAC no entry points at goes, only when an entry points at the file beside it, and only when the two decode to exactly the same audio; the same name is not proof. What rekordbox points at is read again just before anything goes, so rekordbox may stay open, and nothing is written into the database. For rekordbox's database only.
-
 - **Auto hot cues**: Maintenance → Auto hot cues puts a hot cue at the start of each section rekordbox's phrase analysis found — Intro, Up, Drop, Down, Outro — on tracks with no hot cue at all, named after the section, on the phrase or a bar before it. A track with more sections than the eight hot cues keeps its intro, outro, drops and breakdowns first. Every suggestion can be listened to and each track unticked before anything is written; a track that got a hot cue meanwhile is left alone, and memory cues are never touched. For rekordbox's database, with rekordbox closed and a backup first. Tracks rekordbox has not phrase-analysed are listed to analyse first. A cue is called Drop where the bass comes back in full after a breakdown — the app listens for it — rather than wherever rekordbox says "Chorus", which on a real library was mostly not a drop; a drop rekordbox missed inside a build-up gets a cue of its own. Cues are not coloured yet.
 - **Performance: workers**: Maintenance → Performance sets how many files Convert FLAC, Clean up converted FLACs and Auto hot cues work on at once — 4 by default, up to 8 — and every run shows how many workers are busy.
-
 - **Duplicates say what found them, and where the copies differ**: each set shows its method — Identical files, Metadata, or Metadata with the files unreadable — and the fields that matched. It lists what differs between the copies: format, bitrate, sample rate, bit depth, length, size, tags, BPM, key, rating, cues, loops — each compared as it is shown. The path and the date added are left out: they say nothing about the files. What used to be called "fingerprint" is named for what it does: it finds identical files only, which is why the same song as an AIFF and a WAV was never listed.
-
 - **Choose the copy to keep**: every duplicate set has "Keep this" on each copy, whatever the resolution strategy, and "Use recommended" to go back. The badge, the delete confirmation and the merge all follow the choice.
 
 ### 🐛 Bug Fixes
