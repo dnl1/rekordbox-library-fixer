@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-beta.9] - 2026-09-30
+
+### 🎉 New Features
+- **Import from Navidrome**: connect your Navidrome server in Settings → Navidrome — the password is checked against the server, then kept on this computer only, encrypted by the system keychain, and the server receives a one-time token rather than the password. The Navidrome page lists your playlists and searches your songs; pick any of either and "Import into rekordbox" downloads the original files, never transcoded, into a folder of your choice (by default `Navidrome` in your Music folder), keeping the server's Artist/Album folders, and adds them to rekordbox's database — a playlist as a playlist of the same name and order, searched songs to the collection. rekordbox analyses the new tracks itself the first time it opens them. Formats rekordbox cannot play are left on the server, a file an earlier run downloaded is used rather than fetched again, and a cancelled import adds nothing. For rekordbox's database, with rekordbox closed and a backup first.
+
 ## [0.7.0-beta.8] - 2026-09-30
 
 ### 🎉 New Features
