@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0-beta.8] - 2026-09-30
+
+### 🎉 New Features
+- **Settings in one place**: Settings is a page of its own in the sidebar, open with or without a library loaded, with a menu on the left — Duplicate Detection, Track Relocation and Performance. The Settings buttons on the Duplicates and Relocate pages open their own section instead of a slide-out panel, and the worker count moved there from Maintenance, under Performance.
+- **Consolidate always has a destination**: until you choose one, a folder of its own in your Music folder — `~/Music/Rekordbox Library` on macOS and Linux, `C:\Users\<you>\Music\Rekordbox Library` on Windows. Never the Music folder itself, and remembered only once a run has used it: resolving duplicates keeps the copy inside the remembered folder.
+
+### 🐛 Bug Fixes
+- **Resolving duplicates in `master.db` keeps their play history**: the plays of every copy it removed were deleted, taking tracks out of sets in rekordbox's History. They now move to the copy that is kept, each in its session and in its place. Removing broken entries still deletes theirs — there is no copy left to keep them on.
+
 ## [0.7.0-beta.7] - 2026-09-30
 
 ### 🎉 New Features
