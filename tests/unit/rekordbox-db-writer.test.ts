@@ -28,8 +28,14 @@ beforeEach(() => {
     INSERT INTO djmdCue VALUES ('c1','dup1'), ('c2','keep');
     CREATE TABLE agentRegistry (registry_id TEXT PRIMARY KEY, int_1 INTEGER);
     INSERT INTO agentRegistry VALUES ('localUpdateCount', 100);
+    -- set s1 played dup1 twice and keep once; set s2 played dup2
+    CREATE TABLE djmdSongHistory (ID TEXT PRIMARY KEY, HistoryID TEXT, ContentID TEXT, TrackNo INTEGER, rb_local_deleted INTEGER DEFAULT 0);
+    INSERT INTO djmdSongHistory VALUES ('h1','s1','dup1',1,0), ('h2','s1','keep',2,0), ('h3','s1','dup1',3,0), ('h4','s2','dup2',1,0);
   `);
 });
+
+const history = () =>
+  db.prepare('SELECT HistoryID, TrackNo, ContentID FROM djmdSongHistory ORDER BY HistoryID, TrackNo').all();
 
 afterEach(() => {
   try { db.close(); } catch { /* already closed */ }
@@ -106,6 +112,32 @@ describe('applyMerges', () => {
     expect(result.removedLocations).toEqual([]);
     expect(result.skipped).toEqual([{ keepId: 'keep', reason: expect.stringContaining('/Music/copy/song.mp3') }]);
     expect(alive()).toHaveLength(3);
+    expect(result.historyEntriesMoved).toBe(0);
+  });
+
+  it('keeps every play of a retired copy in the history, on the kept entry and in its place', () => {
+    const result = applyMerges(db, [{ keepId: 'keep', removeIds: ['dup1', 'dup2'] }]);
+    // A set that played the song twice still did: history is not deduplicated like a playlist.
+    expect(history()).toEqual([
+      { HistoryID: 's1', TrackNo: 1, ContentID: 'keep' },
+      { HistoryID: 's1', TrackNo: 2, ContentID: 'keep' },
+      { HistoryID: 's1', TrackNo: 3, ContentID: 'keep' },
+      { HistoryID: 's2', TrackNo: 1, ContentID: 'keep' },
+    ]);
+    expect(result.historyEntriesMoved).toBe(3);
+  });
+
+  it('counts the moved plays as changes for rekordbox', () => {
+    applyMerges(db, [{ keepId: 'keep', removeIds: ['dup1', 'dup2'] }]);
+    // 2 entries removed + 1 playlist link moved (A) + 3 plays moved.
+    expect((db.prepare("SELECT int_1 AS n FROM agentRegistry WHERE registry_id='localUpdateCount'").get() as any).n).toBe(106);
+  });
+
+  it('works on a database without a history table', () => {
+    db.exec('DROP TABLE djmdSongHistory');
+    const result = applyMerges(db, [{ keepId: 'keep', removeIds: ['dup1'] }]);
+    expect(result.entriesRemoved).toBe(1);
+    expect(result.historyEntriesMoved).toBe(0);
   });
 });
 

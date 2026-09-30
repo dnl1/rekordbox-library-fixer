@@ -17,6 +17,8 @@ export interface MergePlan {
 export interface MergeOutcome {
   entriesRemoved: number;
   playlistLinksMoved: number;
+  /** Plays of a retired copy in rekordbox's History, now pointing at the kept entry. */
+  historyEntriesMoved: number;
   backupPath: string;
   /** Where the removed entries pointed, so their files can be trashed if asked. */
   removedLocations: string[];
@@ -29,11 +31,12 @@ export interface MergeOutcome {
 /**
  * Retire duplicate collection entries inside rekordbox's own database.
  *
- * Only two things change, both reversible:
+ * What changes, all of it undone by restoring the backup:
  *  - playlist links pointing at a retired entry are moved to the kept entry,
  *    so no playlist loses the song;
- *  - the retired entries are marked `rb_local_deleted = 1`, which is how
- *    rekordbox itself records a deleted track.
+ *  - the retired entry's plays in rekordbox's History are moved to the kept
+ *    entry too, so no set loses a track it played;
+ *  - the retired entries are removed, with the rows other tables hold for them.
  *
  * Rows are marked rather than deleted on purpose: thirteen tables reference a
  * track (cues, mixer params, history, sampler...) and hard deletion would
@@ -116,9 +119,16 @@ export function applyMerges(
   const dropRemainingLinks = db.prepare('DELETE FROM djmdSongPlaylist WHERE ContentID = ?');
   const deleteContent = db.prepare('DELETE FROM djmdContent WHERE ID = ?');
   const readLocation = db.prepare('SELECT FolderPath AS path FROM djmdContent WHERE ID = ?');
+  // Every play of a retired copy was a play of the song, so all of them follow
+  // the kept entry — unlike a playlist, a set may hold the song twice. Deleting
+  // them emptied whole sets out of rekordbox's History.
+  const moveHistory = (() => {
+    try { return db.prepare('UPDATE djmdSongHistory SET ContentID = ? WHERE ContentID = ?'); }
+    catch { return null; }
+  })();
 
   const dependentDeletes = CONTENT_TABLES
-    .filter((table) => table !== 'djmdSongPlaylist')
+    .filter((table) => table !== 'djmdSongPlaylist' && table !== 'djmdSongHistory')
     .map((table) => {
       try { return db.prepare(`DELETE FROM ${table} WHERE ContentID = ?`); }
       catch { return null; }
@@ -127,6 +137,7 @@ export function applyMerges(
 
   let entriesRemoved = 0;
   let playlistLinksMoved = 0;
+  let historyEntriesMoved = 0;
   const removedLocations: string[] = [];
   const skipped: Array<{ keepId: string; reason: string }> = [];
   const locationOf = (id: string) => (readLocation.get(id) as { path?: string } | undefined)?.path;
@@ -146,13 +157,14 @@ export function applyMerges(
         // would duplicate an existing link, so they go.
         playlistLinksMoved += movePlaylistLink.run(plan.keepId, removeId, plan.keepId).changes;
         dropRemainingLinks.run(removeId);
+        historyEntriesMoved += moveHistory?.run(plan.keepId, removeId).changes ?? 0;
         for (const stmt of dependentDeletes) { stmt.run(removeId); }
         const removed = deleteContent.run(removeId).changes;
         entriesRemoved += removed;
         if (removed > 0 && location) { removedLocations.push(location); }
       }
     }
-    bumpUpdateCount(db, entriesRemoved + playlistLinksMoved);
+    bumpUpdateCount(db, entriesRemoved + playlistLinksMoved + historyEntriesMoved);
   });
   run(plans);
 
@@ -160,7 +172,7 @@ export function applyMerges(
     .map((row) => row.path ?? '')
     .filter((loc) => loc.length > 0);
 
-  return { entriesRemoved, playlistLinksMoved, backupPath: '', removedLocations, remainingLocations, skipped };
+  return { entriesRemoved, playlistLinksMoved, historyEntriesMoved, backupPath: '', removedLocations, remainingLocations, skipped };
 }
 
 export interface RemovalOutcome {
