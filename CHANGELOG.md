@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0-beta.5] - 2026-09-30
+
+### 🎉 New Features
+- **Updates from inside the app**: Help → Check for Updates looks for a newer release on GitHub, and the app checks quietly each time it starts (switch it off in the same dialog); a waiting version shows in the status bar. "Download and install" fetches the file for your system and checks it against the checksum GitHub published before running anything. Windows installs and reopens by itself; on macOS the app is replaced once it has closed, and reopens — or, when it runs from a place it cannot write to, the DMG is opened for you; a Linux AppImage is replaced and restarted, a .deb is opened in the system installer. A beta follows betas; a stable version is offered stable releases only. From this version on — this one has to be installed by hand once.
+- **Export a playlist as ZIP**: Maintenance → Export playlist as ZIP puts a playlist's — or a folder's — audio files into one zip, side by side, and nothing else; the library does not change. It says how many files and how much space before it starts, leaves out files that are not on disk and streaming tracks, and can number the files in playlist order. Big playlists are fine: zips past 4 GB are written as ZIP64. A cancelled export leaves nothing behind.
+
 ## [0.7.0-beta.4] - 2026-09-28
 
 ### 🎉 New Features
