@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-beta.7] - 2026-09-30
+
+### 🎉 New Features
+- **The About says whose version this is**: Help → About Rekordbox Library Fixer says this version is a fork maintained by dnl1, with a button that opens the fork on GitHub. The original credit to Koray Sels, its GitHub link and the copyright stay as they were.
+
 ## [0.7.0-beta.6] - 2026-09-30
 
 ### 🎉 New Features
