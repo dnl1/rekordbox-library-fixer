@@ -5,9 +5,10 @@ import type {
   AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary, AutoHotCueProgress,
   UpdateCheckResult, UpdateDownloadProgress, UpdateInstallResult,
   PlaylistZipPreview, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress, PlaylistZipSummary,
+  PlayHistoryRequest, PlayHistorySession,
 } from '../../main/ipcContract';
 
-export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
+export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'playHistory' | 'history' | 'backups' | 'library';
 
 export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
@@ -285,6 +286,8 @@ declare global {
       exportPlaylistZip: (data: PlaylistZipRequest) => Promise<IpcResult<PlaylistZipSummary>>;
       cancelPlaylistZip: (operationId: string) => Promise<{ success: boolean }>;
       onPlaylistZipProgress: (callback: (progress: PlaylistZipProgress) => void) => () => void;
+      // rekordbox's own play history
+      readPlayHistory: (data: PlayHistoryRequest) => Promise<IpcResult<PlayHistorySession[]>>;
       // File Drop APIs
       handleNativeDrop: (filePaths: string[]) => Promise<{ success: boolean; data?: { filePaths: string[]; filePath?: string }; error?: string }>;
       onNativeFileDrop: (callback: (filePaths: string[]) => void) => () => void;

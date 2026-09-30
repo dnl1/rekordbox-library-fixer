@@ -398,5 +398,36 @@ export interface PlaylistZipSummary {
   cancelled: boolean;
 }
 
+/** One entry of a rekordbox History session, in the order it was played. */
+export interface PlayHistoryTrack {
+  /** Its place in the session, as rekordbox numbers it: 1 is the first track played. */
+  trackNo: number;
+  contentId: string;
+  /** When the track entered the history, as an ISO instant. Absent when rekordbox stored none. */
+  playedAt?: string;
+  title: string;
+  artist: string;
+  location: string;
+  /**
+   * False when the entry points at a track the collection no longer has. Its
+   * name is then unknown, but the entry stays — the set was played that long.
+   */
+  inCollection: boolean;
+}
+
+/** A session in rekordbox's History, such as "HISTORY 2026-09-27 (1)". */
+export interface PlayHistorySession {
+  id: string;
+  name: string;
+  /** When rekordbox opened the session, as an ISO instant. */
+  createdAt?: string;
+  tracks: PlayHistoryTrack[];
+}
+
+export interface PlayHistoryRequest {
+  libraryPath: string;
+  dbKey: string;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;

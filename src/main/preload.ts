@@ -5,6 +5,7 @@ import type {
   ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
   AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
   UpdateDownloadProgress, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress,
+  PlayHistoryRequest,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -206,6 +207,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('playlist-zip-progress', handler);
     return () => { ipcRenderer.removeListener('playlist-zip-progress', handler); };
   },
+
+  // rekordbox's own play history
+  readPlayHistory: (data: PlayHistoryRequest) => ipcRenderer.invoke('read-play-history', data),
 
   // Native drag-and-drop
   handleNativeDrop: (filePaths: string[]) => ipcRenderer.invoke('handle-native-drop', filePaths),

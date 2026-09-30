@@ -7,6 +7,7 @@ import {
     Wrench,
     Copy,
     History,
+    ListMusic,
     Archive,
     Library,
     FolderOpen,
@@ -58,6 +59,13 @@ const navItems = [
         label: 'Statistics',
         icon: BarChart2,
         description: 'Get insights for your library'
+    },
+    {
+        id: 'playHistory' as TabType,
+        path: '/play-history',
+        label: 'Play History',
+        icon: ListMusic,
+        description: 'What you played in rekordbox, set by set'
     },
     {
         id: 'history' as TabType,

@@ -6,6 +6,7 @@ import { ImportPage } from './components/pages/ImportPage';
 import { MaintenancePage } from './components/pages/MaintenancePage';
 import { StatisticsPage } from './components/pages/StatisticsPage';
 import { HistoryPage } from './components/pages/HistoryPage';
+import { PlayHistoryPage } from './components/pages/PlayHistoryPage';
 import { BackupsPage } from './components/pages/BackupsPage';
 import { LibraryPage } from './components/pages/LibraryPage';
 
@@ -45,6 +46,12 @@ export const statisticsRoute = createRoute({
   component: StatisticsPage,
 });
 
+export const playHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/play-history',
+  component: PlayHistoryPage,
+});
+
 export const historyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/history',
@@ -70,6 +77,7 @@ const routeTree = rootRoute.addChildren([
   importRoute,
   maintenanceRoute,
   statisticsRoute,
+  playHistoryRoute,
   historyRoute,
   backupsRoute,
   libraryRoute,

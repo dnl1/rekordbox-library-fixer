@@ -40,6 +40,7 @@ const pathToTab: Record<string, TabType> = {
   '/maintenance': 'maintenance',
   '/statistics': 'statistics',
   '/library': 'library',
+  '/play-history': 'playHistory',
   '/history': 'history',
   '/backups': 'backups',
 };

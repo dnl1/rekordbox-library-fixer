@@ -107,6 +107,9 @@ Quality priority order when lossless preference is enabled:
 - Expand an entry to see exactly which tracks were merged, which files went to the trash, and what failed
 - Backup path for each operation, revealable in Finder/Explorer
 
+### Play History
+rekordbox's own History, read straight from `master.db`: every session, newest first, and what was played in it — in order, with the time each track entered the history. The latest set opens by itself, and a search finds every set a track was played in. It only reads, on a copy as loading does, so rekordbox can stay open; **Refresh** picks up a set it is still recording. An entry whose track has since left the collection keeps its place, marked, so a set never reads shorter than it was played. Needs the database open, since that is where the history is read from.
+
 ### Duplicate files vs duplicate entries
 Two different situations wear the word "duplicate", and the difference decides whether a file leaves your disk. Every set states the real numbers, for example `4 entries · 2 files`, and each entry says what will happen to it:
 - **Extra listing · no file removed** — points at the same file as the entry being kept. Rekordbox simply listed it twice; only the duplicate listing goes.
