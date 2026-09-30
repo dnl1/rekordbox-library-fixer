@@ -8,7 +8,7 @@ import type {
   PlayHistoryRequest, PlayHistorySession,
 } from '../../main/ipcContract';
 
-export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'playHistory' | 'history' | 'backups' | 'library';
+export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'playHistory' | 'history' | 'backups' | 'library' | 'settings';
 
 export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
@@ -257,6 +257,7 @@ declare global {
       onFilterProgress?: (callback: (progress: any) => void) => () => void;
 
       // Consolidate Library APIs
+      defaultConsolidateDestination: () => Promise<IpcResult<string>>;
       consolidatePreview: (data: { tracks: any[]; destination: string }) => Promise<any>;
       consolidateLibrary: (data: { operationId: string; tracks: any[]; libraryPath: string; options: any }) => Promise<any>;
       cancelConsolidate?: (operationId: string) => Promise<any>;

@@ -8,7 +8,6 @@ import { FilterMovePanel } from '../maintenance/FilterMovePanel';
 import { ConvertFlacPanel } from '../maintenance/ConvertFlacPanel';
 import { CleanupFlacPanel } from '../maintenance/CleanupFlacPanel';
 import { AutoHotCuePanel } from '../maintenance/AutoHotCuePanel';
-import { WorkersPanel } from '../maintenance/WorkersPanel';
 import { ExportPlaylistZipPanel } from '../maintenance/ExportPlaylistZipPanel';
 
 /**
@@ -21,7 +20,7 @@ import { ExportPlaylistZipPanel } from '../maintenance/ExportPlaylistZipPanel';
  * state distinguished only by an "f" prefix.
  */
 export const MaintenancePage: React.FC = () => {
-  const { libraryData, libraryPath } = useAppContext();
+  const { libraryData, libraryPath, onOpenSettings } = useAppContext();
   const tracks = libraryData ? Array.from(libraryData.tracks.values()) : [];
   const hasLibrary = tracks.length > 0;
 
@@ -33,7 +32,13 @@ export const MaintenancePage: React.FC = () => {
         <BrokenEntriesPanel />
       </div>
 
-      <WorkersPanel />
+      {/* The worker count moved to Settings; say where, for anyone looking for it here. */}
+      <p className="text-xs font-te-mono text-te-grey-500 mt-te-md">
+        How many files Convert FLAC, the FLAC cleanup and Auto hot cues work on at once is set in{' '}
+        <button onClick={() => onOpenSettings?.('performance')} className="text-te-orange hover:underline">
+          Settings → Performance
+        </button>.
+      </p>
       <ConvertFlacPanel />
       <CleanupFlacPanel />
       <AutoHotCuePanel />

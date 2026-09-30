@@ -57,7 +57,7 @@ export const QualityInfo: React.FC = () => {
 
 
 /**
- * How many workers are busy in a run — the number set under Performance, or
+ * How many workers are busy in a run — the number set in Settings → Performance, or
  * fewer as the last files finish. Shown on every run that uses them.
  */
 export const ActiveWorkers: React.FC<{ active: number }> = ({ active }) => (

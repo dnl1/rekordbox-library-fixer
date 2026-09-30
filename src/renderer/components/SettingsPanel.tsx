@@ -71,6 +71,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   // Debounced sync to Zustand store
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleBlurSyncRef = useRef<(() => void) | null>(null);
+  // The options still waiting in the timer, written on unmount rather than lost.
+  const pendingScanOptionsRef = useRef<ScanOptions | null>(null);
+  const setScanOptionsRef = useRef(setScanOptions);
+  setScanOptionsRef.current = setScanOptions;
 
   // Typed fields are debounced; the resolution strategy is a single discrete
   // choice, so it is written immediately. Debouncing it meant a pending write
@@ -81,7 +85,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+    pendingScanOptionsRef.current = scanOpts;
     debounceRef.current = setTimeout(() => {
+      pendingScanOptionsRef.current = null;
       setScanOptions(scanOpts);
     }, 500);
   }, [setScanOptions, setResolutionStrategy]);
@@ -104,11 +110,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     setValue('resolutionStrategy', resolutionStrategy);
   }, [resolutionStrategy, setValue]);
 
-  // Cleanup debounce on unmount
+  // Write a pending change on unmount instead of dropping it. In the Settings
+  // page the panel unmounts whenever another section or page is opened, so a
+  // change made in the last half second would otherwise be lost.
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+      }
+      if (pendingScanOptionsRef.current) {
+        setScanOptionsRef.current(pendingScanOptionsRef.current);
+        pendingScanOptionsRef.current = null;
       }
     };
   }, []);
@@ -196,6 +208,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+    pendingScanOptionsRef.current = null;
     setScanOptions(currentScanOptions);
     setResolutionStrategy(currentResolutionStrategy);
   }, [getValues, setScanOptions, setResolutionStrategy]);

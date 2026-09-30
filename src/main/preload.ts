@@ -120,6 +120,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('open-file-dialog', options),
 
   // Consolidate Library
+  defaultConsolidateDestination: () => ipcRenderer.invoke('default-consolidate-destination'),
   consolidatePreview: (data: { tracks: TrackPayload[]; destination: string }) =>
     ipcRenderer.invoke('consolidate-preview', data),
   consolidateLibrary: (data: {

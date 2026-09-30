@@ -9,6 +9,7 @@ import { checkForUpdates, openUpdateDialog } from './updates/updateSession';
 import { Library } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import type { TabType, LibraryData, NotificationType } from './types';
+import type { SettingsSection } from './settings/sections';
 
 // Context for route components to access app-wide data
 interface AppContextType {
@@ -21,6 +22,8 @@ interface AppContextType {
   onSelectLibrary?: () => void;
   onLoadFromDb?: (dbPath?: string) => void;
   onUnloadLibrary?: () => void;
+  /** Open Settings at a section — where a page's own settings now live. */
+  onOpenSettings?: (section: SettingsSection) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);
@@ -41,6 +44,7 @@ const pathToTab: Record<string, TabType> = {
   '/statistics': 'statistics',
   '/library': 'library',
   '/play-history': 'playHistory',
+  '/settings': 'settings',
   '/history': 'history',
   '/backups': 'backups',
 };
@@ -56,7 +60,7 @@ const AppWithRouter: React.FC = () => {
 
   // Backups are wanted exactly when something went wrong and nothing is
   // loaded, so this page must not sit behind the load screen.
-  const worksWithoutLibrary = ['/backups', '/history', '/library'].includes(location.pathname);
+  const worksWithoutLibrary = ['/backups', '/history', '/library', '/settings'].includes(location.pathname);
 
 
   // Custom hooks
@@ -184,7 +188,8 @@ const AppWithRouter: React.FC = () => {
             onLoadLibrary: openLibrary,
             onSelectLibrary: selectLibrary,
             onLoadFromDb: loadFromDb,
-            onUnloadLibrary: clearStoredData
+            onUnloadLibrary: clearStoredData,
+            onOpenSettings: (section) => navigate({ to: '/settings', search: { section } })
           }}>
             {/* No mode="wait": the outgoing page's exit would otherwise have to
                 finish before the new one starts, doubling the perceived delay. */}

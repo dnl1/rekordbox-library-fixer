@@ -19,19 +19,16 @@ import { useAppContext } from '../AppWithRouter';
 import type {
   RelocationCandidate
 } from '../types';
-import { SettingsSlideout, PopoverButton, PageHeader } from './ui';
+import { PopoverButton, PageHeader } from './ui';
 import { AutoRelocateProgressDialog } from './ui/AutoRelocateProgressDialog';
-import { TrackRelocatorSettings } from './TrackRelocatorSettings';
 import { VirtualizedList } from './VirtualizedList';
 import { MissingTrackItem } from './MissingTrackItem';
 
 const TrackRelocator: React.FC = () => {
-  const { libraryData, libraryPath, showNotification, setLibraryData } = useAppContext();
+  const { libraryData, libraryPath, showNotification, setLibraryData, onOpenSettings } = useAppContext();
 
   // Get settings store first, before initializing the hook
   const relocationOptions = useSettingsStore((state) => state.relocationOptions);
-  const addRelocationSearchPath = useSettingsStore((state) => state.addRelocationSearchPath);
-  const removeRelocationSearchPath = useSettingsStore((state) => state.removeRelocationSearchPath);
 
   const {
     // State
@@ -59,8 +56,6 @@ const TrackRelocator: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMissingTracks, setSelectedMissingTracks] = useState<Set<string>>(new Set());
-  const [showSettings, setShowSettings] = useState(false);
-  const [newSearchPath, setNewSearchPath] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [isAutoRelocating, setIsAutoRelocating] = useState(false);
   const [showProgressDialog, setShowProgressDialog] = useState(false);
@@ -163,18 +158,6 @@ const TrackRelocator: React.FC = () => {
     setIsAutoRelocating(false);
   };
 
-  // Functions for managing search paths
-  const addSearchPath = () => {
-    if (newSearchPath.trim()) {
-      addRelocationSearchPath(newSearchPath.trim());
-      setNewSearchPath('');
-    }
-  };
-
-  const removeSearchPath = (index: number) => {
-    removeRelocationSearchPath(index);
-  };
-
   // Handle candidate selection
   const selectCandidate = (candidate: RelocationCandidate) => {
     if (selectedTrack) {
@@ -225,7 +208,7 @@ const TrackRelocator: React.FC = () => {
         actions={
           <>
             <PopoverButton
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => onOpenSettings?.('relocation')}
               icon={Settings}
               title="Search Settings"
               description="Configure search paths, depth, and matching criteria for finding relocated tracks"
@@ -487,22 +470,7 @@ const TrackRelocator: React.FC = () => {
         )}
       </div>
 
-      {/* Settings Slideout */}
-      <SettingsSlideout
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        title="TRACK RELOCATOR SETTINGS"
-        subtitle="Configure search paths and matching criteria"
-        width="xl"
-      >
-        <TrackRelocatorSettings
-          searchOptions={searchOptions}
-          newSearchPath={newSearchPath}
-          setNewSearchPath={setNewSearchPath}
-          addSearchPath={addSearchPath}
-          removeSearchPath={removeSearchPath}
-        />
-      </SettingsSlideout>
+      {/* The search settings live in Settings → Track Relocation, opened by the button above. */}
 
       {/* Progress Dialog */}
       <AutoRelocateProgressDialog

@@ -29,6 +29,11 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
 }) => {
   const destination = useSettingsStore((s) => s.consolidateDestination);
   const setDestination = useSettingsStore((s) => s.setConsolidateDestination);
+  // There is always somewhere to consolidate to: a folder of its own in this
+  // computer's Music folder until one is chosen. It is only remembered once a
+  // run uses it — the remembered folder decides which duplicate is kept.
+  const [defaultDestination, setDefaultDestination] = useState('');
+  const target = destination.trim() ? destination : defaultDestination;
   const [mode, setMode] = useState<Mode>('copy');
   const [conflictResolution, setConflictResolution] = useState<ConflictResolution>('skip');
   const [preferLossless, setPreferLossless] = useState(false);
@@ -42,6 +47,14 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
   const cancelledRef = useRef(false);
 
   // Filter & Move state
+
+  useEffect(() => {
+    let active = true;
+    window.electronAPI.defaultConsolidateDestination?.().then((res) => {
+      if (active && res?.success && res.data) { setDefaultDestination(res.data); }
+    }).catch(() => { /* the field then waits for a folder to be chosen */ });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const unsub = window.electronAPI.onConsolidateProgress?.((p: any) => {
@@ -59,11 +72,11 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
   }, []);
 
   const runPreview = useCallback(async () => {
-    if (!destination || !hasLibrary) {return;}
+    if (!target || !hasLibrary) {return;}
     setPhase('previewing');
     setError(null);
     try {
-      const res = await window.electronAPI.consolidatePreview({ tracks, destination });
+      const res = await window.electronAPI.consolidatePreview({ tracks, destination: target });
       if (res.success) {
         setPreview(res.data);
         setPhase('previewed');
@@ -75,10 +88,11 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
       setError('Preview failed');
       setPhase('idle');
     }
-  }, [destination, hasLibrary, tracks]);
+  }, [target, hasLibrary, tracks]);
 
   const runConsolidate = useCallback(async () => {
-    if (!destination || !hasLibrary) {return;}
+    if (!target || !hasLibrary) {return;}
+    if (target !== destination) { setDestination(target); }
     const operationId = `consolidate-${Date.now()}`;
     operationIdRef.current = operationId;
     cancelledRef.current = false;
@@ -91,7 +105,7 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
         operationId,
         tracks,
         libraryPath: libraryPath ?? '',
-        options: { destination, mode, conflictResolution, preferLossless },
+        options: { destination: target, mode, conflictResolution, preferLossless },
       });
       if (cancelledRef.current) {return;}
       if (res.success) {
@@ -107,7 +121,7 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
         setPhase('idle');
       }
     }
-  }, [destination, hasLibrary, tracks, libraryPath, mode, conflictResolution, preferLossless]);
+  }, [target, destination, setDestination, hasLibrary, tracks, libraryPath, mode, conflictResolution, preferLossless]);
 
   const cancel = useCallback(async () => {
     cancelledRef.current = true;
@@ -150,7 +164,7 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
               <input
                 id="consolidate-destination"
                 type="text"
-                value={destination}
+                value={destination || defaultDestination}
                 onChange={e => { setDestination(e.target.value); reset(); }}
                 placeholder="/Volumes/SSD/Music"
                 className="flex-1 border border-te-grey-300 rounded-te px-3 py-2 text-sm font-te-mono bg-te-cream focus:outline-none focus:border-te-orange"
@@ -159,6 +173,12 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
                 <FolderOpen className="w-4 h-4" />
               </button>
             </div>
+            {!destination.trim() && defaultDestination && (
+              <p className="text-xs font-te-mono text-te-grey-400 mt-1">
+                The default: a folder of its own in your Music folder. Choose another — an external
+                drive, say — at any time.
+              </p>
+            )}
           </div>
 
           {/* Mode */}
@@ -297,14 +317,14 @@ export const ConsolidatePanel: React.FC<ConsolidatePanelProps> = ({
               <>
                 <button
                   onClick={runPreview}
-                  disabled={!destination || phase === 'previewing'}
+                  disabled={!target || phase === 'previewing'}
                   className="btn-secondary flex items-center gap-2 disabled:opacity-40"
                 >
                   {phase === 'previewing' ? 'Previewing…' : 'Preview'}
                 </button>
                 <button
                   onClick={runConsolidate}
-                  disabled={!destination}
+                  disabled={!target}
                   className="btn-primary flex items-center gap-2 disabled:opacity-40"
                 >
                   <Play className="w-4 h-4" />

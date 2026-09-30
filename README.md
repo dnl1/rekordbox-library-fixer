@@ -152,6 +152,9 @@ The conversion uses a bundled [ffmpeg](https://ffmpeg.org/): the [ffmpeg-static 
 ### Backups
 A backup manager reachable at any time, with or without a library loaded. Lists every backup the app has taken, restores one (writing a safety copy of the current state first), and asks whether you want to load the restored library straight away.
 
+### Settings
+Every setting in one place, reached from the sidebar with or without a library loaded. A menu on the left picks the section: **Duplicate Detection** (detection methods, which copy is kept, path preferences), **Track Relocation** (where missing tracks are searched for, and how close a match must be) and **Performance** (how many files the Maintenance tools work on at once). The Settings buttons on the Duplicates and Relocate pages open their own section.
+
 ### Notifications
 Toasts stack instead of replacing each other, stay long enough to read, and can be dismissed. Important results — a finished scan, a completed resolve, a failure — also raise a system notification, so a long scan can run while you do something else.
 

@@ -9,6 +9,8 @@ import { HistoryPage } from './components/pages/HistoryPage';
 import { PlayHistoryPage } from './components/pages/PlayHistoryPage';
 import { BackupsPage } from './components/pages/BackupsPage';
 import { LibraryPage } from './components/pages/LibraryPage';
+import { SettingsPage } from './components/pages/SettingsPage';
+import { parseSettingsSection, type SettingsSection } from './settings/sections';
 
 // Root route - wraps entire app
 export const rootRoute = createRootRoute({
@@ -64,6 +66,17 @@ export const backupsRoute = createRoute({
   component: BackupsPage,
 });
 
+export const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsPage,
+  // Optional, so a plain link to /settings opens the first section.
+  validateSearch: (search: Record<string, unknown>): { section?: SettingsSection } => {
+    const section = parseSettingsSection(search.section);
+    return section ? { section } : {};
+  },
+});
+
 export const libraryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/library',
@@ -81,6 +94,7 @@ const routeTree = rootRoute.addChildren([
   historyRoute,
   backupsRoute,
   libraryRoute,
+  settingsRoute,
 ]);
 
 // Use memory history so file:// protocol in packaged Electron doesn't break routing

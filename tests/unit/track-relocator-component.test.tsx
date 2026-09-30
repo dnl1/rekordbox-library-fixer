@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TrackRelocator } from '../../src/renderer/components/TrackRelocator';
 import type { LibraryData } from '../../src/renderer/types';
 
@@ -56,6 +56,7 @@ const mockAppContextValue = {
   libraryPath: '',
   showNotification: vi.fn(),
   setLibraryData: vi.fn(),
+  onOpenSettings: vi.fn(),
 };
 
 vi.mock('../../src/renderer/AppWithRouter', () => ({
@@ -103,6 +104,15 @@ describe('TrackRelocator Component Library Path Tests', () => {
   const renderTrackRelocator = () => {
     return render(<TrackRelocator />);
   };
+
+  it('opens Settings at Track Relocation — its search settings live there now', () => {
+    // The header, and its Settings button, only show with a library loaded.
+    mockAppContextValue.libraryData = { libraryPath: '/x/library.xml', tracks: new Map(), playlists: [] };
+    mockAppContextValue.libraryPath = '/x/library.xml';
+    renderTrackRelocator();
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }));
+    expect(mockAppContextValue.onOpenSettings).toHaveBeenCalledWith('relocation');
+  });
 
   describe('Library Path Parameter Passing', () => {
     it('should pass both libraryData and libraryPath to useTrackRelocator hook', () => {

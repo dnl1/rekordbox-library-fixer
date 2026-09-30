@@ -12,7 +12,8 @@ import {
     Library,
     FolderOpen,
     X,
-    HelpCircle
+    HelpCircle,
+    Settings
 } from 'lucide-react';
 import {motion} from 'framer-motion';
 import type {TabType, LibraryData} from '../types';
@@ -80,6 +81,13 @@ const navItems = [
         label: 'Backups',
         icon: Archive,
         description: 'Go back to any earlier version of your library'
+    },
+    {
+        id: 'settings' as TabType,
+        path: '/settings',
+        label: 'Settings',
+        icon: Settings,
+        description: 'Every setting in one place'
     }
 ];
 
@@ -127,7 +135,7 @@ export function Sidebar({
                         // History and Backups must stay reachable without a
                         // library: they are what you turn to when something
                         // went wrong and nothing is loaded.
-                        const worksWithoutLibrary = ['library', 'duplicates', 'history', 'backups'];
+                        const worksWithoutLibrary = ['library', 'duplicates', 'history', 'backups', 'settings'];
                         const isDisabled = !libraryData && !worksWithoutLibrary.includes(item.id);
 
                         if (isDisabled) {

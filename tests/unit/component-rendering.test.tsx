@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 /**
@@ -10,6 +10,8 @@ import React from 'react';
  * This catches issues like missing imports, undefined functions, etc.
  */
 
+const { mockOpenSettings } = vi.hoisted(() => ({ mockOpenSettings: vi.fn() }));
+
 // Mock AppContext so components using useAppContext() don't throw
 vi.mock('../../src/renderer/AppWithRouter', () => ({
   useAppContext: () => ({
@@ -17,6 +19,7 @@ vi.mock('../../src/renderer/AppWithRouter', () => ({
     libraryPath: '',
     showNotification: vi.fn(),
     setLibraryData: vi.fn(),
+    onOpenSettings: mockOpenSettings,
   }),
 }));
 
@@ -256,6 +259,13 @@ describe('Component Rendering Tests', () => {
       });
 
       expect(screen.getByText('Duplicate Detection')).toBeInTheDocument();
+    });
+
+    it('opens Settings at Duplicate Detection — its scan settings live there now', async () => {
+      const DuplicateDetector = (await import('../../src/renderer/components/DuplicateDetector')).default;
+      await act(async () => { render(<DuplicateDetector />); });
+      fireEvent.click(screen.getByRole('button', { name: /^Settings/ }));
+      expect(mockOpenSettings).toHaveBeenCalledWith('duplicates');
     });
   });
 

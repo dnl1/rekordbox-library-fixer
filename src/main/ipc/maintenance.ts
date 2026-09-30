@@ -1,9 +1,11 @@
-import { ipcMain } from 'electron';
+import * as path from 'path';
+import { app, ipcMain } from 'electron';
 import { runtime, safeConsole } from '../runtime';
 import { findBrokenEntries, diagnoseLocation, isStreamingLocation } from '../brokenEntries';
 import { removeEntriesFromDb } from '../rekordboxDbWriter';
 import { assertWritableLibraryPath } from '../librarySource';
-import type { TrackPayload } from '../ipcContract';
+import { defaultConsolidateDestination } from '../defaultPaths';
+import type { IpcResult, TrackPayload } from '../ipcContract';
 
 // ─── Consolidate Library ──────────────────────────────────────────────────────
 
@@ -129,6 +131,14 @@ export function registerMaintenanceIpc(): void {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
+  });
+
+  // Where Consolidate gathers the library when nothing was chosen, from the
+  // platform's own Music folder.
+  ipcMain.handle('default-consolidate-destination', async (): Promise<IpcResult<string>> => {
+    let music: string;
+    try { music = app.getPath('music'); } catch { music = path.join(app.getPath('home'), 'Music'); }
+    return { success: true, data: defaultConsolidateDestination(music, process.platform) };
   });
 
   ipcMain.handle('consolidate-preview', async (_, { tracks, destination }: { tracks: TrackPayload[]; destination: string }) => {

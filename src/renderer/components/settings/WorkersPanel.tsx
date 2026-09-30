@@ -17,7 +17,7 @@ export const WorkersPanel: React.FC = () => {
   return (
     <div className="bg-white rounded-te shadow-sm p-te-md mt-te-md">
       <h3 className="font-semibold text-te-grey-800 mb-1 flex items-center gap-2">
-        <Cpu className="w-4 h-4" /> Performance
+        <Cpu className="w-4 h-4" /> Workers
       </h3>
       <p className="text-sm text-te-grey-500 font-te-mono mb-te-md">
         How many files are worked on at once by Convert FLAC, Clean up converted FLACs and Auto hot cues.

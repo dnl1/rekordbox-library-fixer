@@ -15,15 +15,14 @@ import { useDuplicateResolution } from '../hooks/useDuplicateResolution';
 import { duplicateStorage } from '../db/duplicatesDb';
 import { useAppContext } from '../AppWithRouter';
 import { VirtualizedDuplicateList } from './VirtualizedDuplicateList';
-import { SettingsSlideout, PopoverButton, PageHeader, DeleteConfirmModal, DuplicateHelp } from './ui';
-import { SettingsPanel } from './SettingsPanel';
+import { PopoverButton, PageHeader, DeleteConfirmModal, DuplicateHelp } from './ui';
 import { DuplicateToolbar } from './DuplicateToolbar';
 import { countPlaylistMembership } from '../utils/playlistMembership';
 import { classifyDuplicateSet } from '../utils/classifyDuplicateSet';
 import { isStreamingTrack } from '../utils/streamingSource';
 
 const DuplicateDetector: React.FC = () => {
-  const { libraryData, libraryPath, showNotification, setLibraryData, onLoadLibrary } = useAppContext();
+  const { libraryData, libraryPath, showNotification, setLibraryData, onLoadLibrary, onOpenSettings } = useAppContext();
 
   // How many playlists each track belongs to — shown in each duplicate row so
   // you can see a track's playlist reach before choosing which copy to keep.
@@ -42,9 +41,7 @@ const DuplicateDetector: React.FC = () => {
     setHasScanned,
     selectedDuplicates,
     scanOptions,
-    setScanOptions,
     resolutionStrategy,
-    setResolutionStrategy,
     currentLibraryPath,
     setCurrentLibraryPath,
     toggleDuplicateSelection,
@@ -102,7 +99,6 @@ const DuplicateDetector: React.FC = () => {
 
   console.log('🎯 DuplicateDetector render - duplicates:', { length: duplicates.length, hasScanned, isScanning });
 
-  const [showSettings, setShowSettings] = useState(false);
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [deleteFromDisk, setDeleteFromDisk] = useState(false);
   const [pendingDeletePaths, setPendingDeletePaths] = useState<string[] | null>(null);
@@ -314,7 +310,7 @@ const DuplicateDetector: React.FC = () => {
         stats={`${visibleDuplicates.length} of ${duplicates.length} sets${wasCancelled ? ' (partial scan)' : ''} • ${selectedDuplicates.size} selected`}
         actions={
           <PopoverButton
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => onOpenSettings?.('duplicates')}
             icon={Settings}
             title="Scan Settings"
             description="Configure duplicate detection options including fingerprinting, metadata fields, path preferences, and resolution strategy"
@@ -441,23 +437,7 @@ const DuplicateDetector: React.FC = () => {
         )}
       </div>
 
-      {/* Settings Slideout Panel */}
-      <SettingsSlideout
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        title="Duplicate Detection Settings"
-        subtitle="Configure scan options and resolution preferences"
-        width="xl"
-      >
-        <SettingsPanel
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          scanOptions={scanOptions}
-          setScanOptions={setScanOptions}
-          resolutionStrategy={resolutionStrategy}
-          setResolutionStrategy={setResolutionStrategy}
-        />
-      </SettingsSlideout>
+      {/* The scan settings live in Settings → Duplicate Detection, opened by the button above. */}
 
       {/* 3-step delete confirmation modal */}
       {pendingDeletePaths && (
