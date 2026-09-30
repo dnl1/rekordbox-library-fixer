@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-beta.6] - 2026-09-30
+
+### 🎉 New Features
+- **Play History**: a Play History tab shows rekordbox's own History, read out of `master.db`: every session, newest first, with its tracks in the order they were played and the time each one entered the history. The latest set opens by itself, and a search finds every set a track was played in. It only reads, on a copy as loading does, so rekordbox may stay open, and Refresh picks up a set it is still recording. An entry whose track has left the collection keeps its place, marked, so a set does not read shorter than it was played. For rekordbox's database only.
+
 ## [0.7.0-beta.5] - 2026-09-30
 
 ### 🎉 New Features
