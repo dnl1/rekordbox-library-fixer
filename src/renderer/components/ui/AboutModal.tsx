@@ -56,7 +56,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
           <p className="text-te-grey-400 text-sm mb-2 font-te-mono">
             Developed by <span className="text-te-cream font-medium">Koray Sels</span>
           </p>
-          
+          {/* This build is a modified version, and the licence asks for that to be said. */}
+          <p className="text-te-grey-400 text-sm mb-2 font-te-mono">
+            This version is a fork maintained by <span className="text-te-cream font-medium">dnl1</span>
+          </p>
+
           {/* Links */}
           <div className="mb-3 flex flex-col space-y-2">
             <button
@@ -71,7 +75,20 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               <ExternalLink className="w-4 h-4" />
               <span>View on GitHub</span>
             </button>
-            
+
+            <button
+              onClick={async () => {
+                const result = await window.electronAPI.openExternal('https://github.com/dnl1/rekordbox-library-fixer');
+                if (!result.success) {
+                  console.error('Failed to open GitHub:', result.error);
+                }
+              }}
+              className="inline-flex items-center justify-center space-x-2 px-3 py-1.5 bg-te-grey-700 hover:bg-te-grey-600 text-te-grey-300 hover:text-te-cream rounded-te border border-te-grey-600 transition-colors font-te-mono text-sm"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>dnl1&apos;s fork on GitHub</span>
+            </button>
+
             <button
               onClick={async () => {
                 const result = await window.electronAPI.openExternal('https://ko-fi.com/koraysels');
