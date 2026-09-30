@@ -3,7 +3,7 @@
  * of its own opens Settings at its section rather than keeping a panel of
  * its own, so there is one place to look.
  */
-export const SETTINGS_SECTIONS = ['duplicates', 'relocation', 'performance'] as const;
+export const SETTINGS_SECTIONS = ['duplicates', 'relocation', 'performance', 'navidrome'] as const;
 
 export type SettingsSection = typeof SETTINGS_SECTIONS[number];
 

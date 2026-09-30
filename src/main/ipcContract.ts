@@ -429,5 +429,63 @@ export interface PlayHistoryRequest {
   dbKey: string;
 }
 
+export type { SubsonicSong as NavidromeSong, SubsonicPlaylist as NavidromePlaylist } from './navidrome/subsonic';
+
+/** The saved Navidrome connection as the renderer may see it: never the password. */
+export interface NavidromeConnectionInfo {
+  url: string;
+  username: string;
+  hasPassword: boolean;
+}
+
+export interface NavidromeConnectionRequest {
+  url: string;
+  username: string;
+  /** Empty keeps the password already saved for this address and user. */
+  password: string;
+}
+
+export interface NavidromeServerStatus {
+  serverVersion?: string;
+  apiVersion: string;
+}
+
+export interface NavidromeImportRequest {
+  operationId: string;
+  /** The open library: rekordbox's master.db. */
+  libraryPath: string;
+  dbKey: string;
+  /** Where the files are downloaded; the server's own folder layout is kept under it. */
+  destination: string;
+  /** Imported as rekordbox playlists of the same name, in the same order. */
+  playlistIds: string[];
+  /** Added to the collection only. */
+  songIds: string[];
+}
+
+export interface NavidromeImportProgress {
+  operationId: string;
+  phase: 'listing' | 'downloading' | 'writing';
+  current: number;
+  total: number;
+  currentFile: string;
+}
+
+export interface NavidromeImportSummary {
+  downloaded: number;
+  /** Already downloaded by an earlier run, at the size the server reports. */
+  reused: number;
+  skipped: Array<{ title: string; reason: string }>;
+  failed: Array<{ title: string; error: string }>;
+  tracksAdded: number;
+  /** Already in the collection at the same location. */
+  tracksAlreadyThere: number;
+  playlists: Array<{ name: string; tracks: number }>;
+  backupPath?: string;
+  playlistFileUpdated: boolean;
+  playlistFileProblem?: string;
+  cancelled: boolean;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;

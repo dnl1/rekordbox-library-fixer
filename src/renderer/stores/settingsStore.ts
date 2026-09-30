@@ -19,6 +19,8 @@ interface SettingsState {
   workers: number;
   /** Look for a newer release on GitHub each time the app starts. */
   checkUpdatesOnStart: boolean;
+  /** Where Navidrome imports are downloaded. Empty means the default folder in Music. */
+  navidromeDestination: string;
 
   // Actions
   setScanOptions: (options: ScanOptions) => void;
@@ -27,6 +29,7 @@ interface SettingsState {
   setConsolidateDestination: (folder: string) => void;
   setWorkers: (workers: number) => void;
   setCheckUpdatesOnStart: (check: boolean) => void;
+  setNavidromeDestination: (folder: string) => void;
   updateScanOption: <K extends keyof ScanOptions>(key: K, value: ScanOptions[K]) => void;
   addPathPreference: (path: string) => void;
   removePathPreference: (index: number) => void;
@@ -54,6 +57,7 @@ export const useSettingsStore = create<SettingsState>()(
       consolidateDestination: '',
       workers: DEFAULT_WORKERS,
       checkUpdatesOnStart: true,
+      navidromeDestination: '',
       relocationOptions: {
         searchPaths: [],
         searchDepth: 8,
@@ -80,6 +84,8 @@ export const useSettingsStore = create<SettingsState>()(
       setWorkers: (workers) => set({ workers: clampWorkers(workers) }),
 
       setCheckUpdatesOnStart: (check) => set({ checkUpdatesOnStart: check }),
+
+      setNavidromeDestination: (folder) => set({ navidromeDestination: folder }),
 
       updateScanOption: (key, value) => {
         console.log(`🔧 Zustand: Updating scan option ${key}:`, value);

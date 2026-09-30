@@ -5,7 +5,7 @@ import type {
   ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
   AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
   UpdateDownloadProgress, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress,
-  PlayHistoryRequest,
+  PlayHistoryRequest, NavidromeConnectionRequest, NavidromeImportRequest, NavidromeImportProgress,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -207,6 +207,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, progress: PlaylistZipProgress) => callback(progress);
     ipcRenderer.on('playlist-zip-progress', handler);
     return () => { ipcRenderer.removeListener('playlist-zip-progress', handler); };
+  },
+
+  // Navidrome: the connection, browsing, and importing into rekordbox
+  navidromeConnection: () => ipcRenderer.invoke('navidrome-connection'),
+  navidromeSaveConnection: (data: NavidromeConnectionRequest) => ipcRenderer.invoke('navidrome-save-connection', data),
+  navidromeForgetConnection: () => ipcRenderer.invoke('navidrome-forget-connection'),
+  navidromePlaylists: () => ipcRenderer.invoke('navidrome-playlists'),
+  navidromePlaylistSongs: (id: string) => ipcRenderer.invoke('navidrome-playlist-songs', id),
+  navidromeSearch: (query: string) => ipcRenderer.invoke('navidrome-search', query),
+  navidromeDefaultDestination: () => ipcRenderer.invoke('navidrome-default-destination'),
+  navidromeImport: (data: NavidromeImportRequest) => ipcRenderer.invoke('navidrome-import', data),
+  cancelNavidromeImport: (operationId: string) => ipcRenderer.invoke('navidrome-cancel-import', operationId),
+  onNavidromeImportProgress: (callback: (progress: NavidromeImportProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: NavidromeImportProgress) => callback(progress);
+    ipcRenderer.on('navidrome-import-progress', handler);
+    return () => { ipcRenderer.removeListener('navidrome-import-progress', handler); };
   },
 
   // rekordbox's own play history

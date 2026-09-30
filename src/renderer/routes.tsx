@@ -10,6 +10,7 @@ import { PlayHistoryPage } from './components/pages/PlayHistoryPage';
 import { BackupsPage } from './components/pages/BackupsPage';
 import { LibraryPage } from './components/pages/LibraryPage';
 import { SettingsPage } from './components/pages/SettingsPage';
+import { NavidromePage } from './components/pages/NavidromePage';
 import { parseSettingsSection, type SettingsSection } from './settings/sections';
 
 // Root route - wraps entire app
@@ -66,6 +67,12 @@ export const backupsRoute = createRoute({
   component: BackupsPage,
 });
 
+export const navidromeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/navidrome',
+  component: NavidromePage,
+});
+
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -94,6 +101,7 @@ const routeTree = rootRoute.addChildren([
   historyRoute,
   backupsRoute,
   libraryRoute,
+  navidromeRoute,
   settingsRoute,
 ]);
 

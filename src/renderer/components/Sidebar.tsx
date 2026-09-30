@@ -13,7 +13,8 @@ import {
     FolderOpen,
     X,
     HelpCircle,
-    Settings
+    Settings,
+    Server
 } from 'lucide-react';
 import {motion} from 'framer-motion';
 import type {TabType, LibraryData} from '../types';
@@ -83,6 +84,13 @@ const navItems = [
         description: 'Go back to any earlier version of your library'
     },
     {
+        id: 'navidrome' as TabType,
+        path: '/navidrome',
+        label: 'Navidrome',
+        icon: Server,
+        description: 'Import tracks and playlists from your Navidrome server'
+    },
+    {
         id: 'settings' as TabType,
         path: '/settings',
         label: 'Settings',
@@ -135,7 +143,7 @@ export function Sidebar({
                         // History and Backups must stay reachable without a
                         // library: they are what you turn to when something
                         // went wrong and nothing is loaded.
-                        const worksWithoutLibrary = ['library', 'duplicates', 'history', 'backups', 'settings'];
+                        const worksWithoutLibrary = ['library', 'duplicates', 'history', 'backups', 'navidrome', 'settings'];
                         const isDisabled = !libraryData && !worksWithoutLibrary.includes(item.id);
 
                         if (isDisabled) {

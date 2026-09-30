@@ -44,6 +44,7 @@ const pathToTab: Record<string, TabType> = {
   '/statistics': 'statistics',
   '/library': 'library',
   '/play-history': 'playHistory',
+  '/navidrome': 'navidrome',
   '/settings': 'settings',
   '/history': 'history',
   '/backups': 'backups',
@@ -60,7 +61,7 @@ const AppWithRouter: React.FC = () => {
 
   // Backups are wanted exactly when something went wrong and nothing is
   // loaded, so this page must not sit behind the load screen.
-  const worksWithoutLibrary = ['/backups', '/history', '/library', '/settings'].includes(location.pathname);
+  const worksWithoutLibrary = ['/backups', '/history', '/library', '/navidrome', '/settings'].includes(location.pathname);
 
 
   // Custom hooks

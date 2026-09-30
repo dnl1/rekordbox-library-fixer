@@ -76,7 +76,7 @@ export interface HotCueWriteOutcome {
 }
 
 /** rekordbox's timestamp: `2026-09-27 01:58:13.887 +00:00`. */
-const rekordboxTimestamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', ' +00:00');
+export const rekordboxTimestamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', ' +00:00');
 
 /** Why a set of cues must not be written, or null when it may. */
 function invalid(cues: HotCueWrite['cues']): string | null {

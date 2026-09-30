@@ -6,9 +6,11 @@ import type {
   UpdateCheckResult, UpdateDownloadProgress, UpdateInstallResult,
   PlaylistZipPreview, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress, PlaylistZipSummary,
   PlayHistoryRequest, PlayHistorySession,
+  NavidromeConnectionInfo, NavidromeConnectionRequest, NavidromeServerStatus, NavidromePlaylist, NavidromeSong,
+  NavidromeImportRequest, NavidromeImportProgress, NavidromeImportSummary,
 } from '../../main/ipcContract';
 
-export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'playHistory' | 'history' | 'backups' | 'library' | 'settings';
+export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'playHistory' | 'history' | 'backups' | 'library' | 'navidrome' | 'settings';
 
 export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
@@ -287,6 +289,17 @@ declare global {
       exportPlaylistZip: (data: PlaylistZipRequest) => Promise<IpcResult<PlaylistZipSummary>>;
       cancelPlaylistZip: (operationId: string) => Promise<{ success: boolean }>;
       onPlaylistZipProgress: (callback: (progress: PlaylistZipProgress) => void) => () => void;
+      // Navidrome
+      navidromeConnection: () => Promise<IpcResult<NavidromeConnectionInfo | null>>;
+      navidromeSaveConnection: (data: NavidromeConnectionRequest) => Promise<IpcResult<NavidromeServerStatus>>;
+      navidromeForgetConnection: () => Promise<IpcResult>;
+      navidromePlaylists: () => Promise<IpcResult<NavidromePlaylist[]>>;
+      navidromePlaylistSongs: (id: string) => Promise<IpcResult<NavidromeSong[]>>;
+      navidromeSearch: (query: string) => Promise<IpcResult<NavidromeSong[]>>;
+      navidromeDefaultDestination: () => Promise<IpcResult<string>>;
+      navidromeImport: (data: NavidromeImportRequest) => Promise<IpcResult<NavidromeImportSummary>>;
+      cancelNavidromeImport: (operationId: string) => Promise<{ success: boolean }>;
+      onNavidromeImportProgress: (callback: (progress: NavidromeImportProgress) => void) => () => void;
       // rekordbox's own play history
       readPlayHistory: (data: PlayHistoryRequest) => Promise<IpcResult<PlayHistorySession[]>>;
       // File Drop APIs

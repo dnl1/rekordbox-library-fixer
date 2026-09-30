@@ -15,6 +15,7 @@ import { registerHotCueIpc } from './ipc/hotCues';
 import { registerUpdateIpc } from './ipc/updates';
 import { registerExportIpc } from './ipc/export';
 import { registerPlayHistoryIpc } from './ipc/playHistory';
+import { registerNavidromeIpc } from './ipc/navidrome';
 
 
 // Must run before app ready — grants media:// streaming + fetch privileges.
@@ -306,6 +307,7 @@ app.whenReady().then(async () => {
   registerUpdateIpc();
   registerExportIpc();
   registerPlayHistoryIpc();
+  registerNavidromeIpc();
 
   // Database storage is now handled via Dexie in the renderer process
   safeConsole.log('✅ Application initialized');

@@ -1,11 +1,12 @@
 import React from 'react';
-import { Copy, Cpu, MapPin, Settings as SettingsIcon } from 'lucide-react';
+import { Copy, Cpu, MapPin, Server, Settings as SettingsIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PageHeader } from '../ui';
 import { SettingsPanel } from '../SettingsPanel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { RelocationSettings } from './RelocationSettings';
 import { WorkersPanel } from './WorkersPanel';
+import { NavidromeSettings } from './NavidromeSettings';
 import { SETTINGS_SECTIONS, type SettingsSection } from '../../settings/sections';
 
 const SECTION_META: Record<SettingsSection, { label: string; description: string; icon: LucideIcon }> = {
@@ -23,6 +24,11 @@ const SECTION_META: Record<SettingsSection, { label: string; description: string
     label: 'Performance',
     description: 'How many files the Maintenance tools work on at once.',
     icon: Cpu,
+  },
+  navidrome: {
+    label: 'Navidrome',
+    description: 'The Navidrome server tracks and playlists are imported from.',
+    icon: Server,
   },
 };
 
@@ -49,6 +55,7 @@ const SECTION_CONTENT: Record<SettingsSection, React.FC> = {
   duplicates: DuplicateSettings,
   relocation: RelocationSettings,
   performance: PerformanceSettings,
+  navidrome: NavidromeSettings,
 };
 
 interface SettingsLayoutProps {

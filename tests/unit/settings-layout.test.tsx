@@ -14,7 +14,7 @@ describe('SettingsLayout', () => {
   it('lists every section in the menu on the left, the open one marked', () => {
     render(<SettingsLayout section="duplicates" onSelect={vi.fn()} />);
     const items = menu().getAllByRole('button').map((b) => b.textContent);
-    expect(items).toEqual(['Duplicate Detection', 'Track Relocation', 'Performance']);
+    expect(items).toEqual(['Duplicate Detection', 'Track Relocation', 'Performance', 'Navidrome']);
     expect(menu().getByRole('button', { name: 'Duplicate Detection' }).getAttribute('aria-current')).toBe('page');
   });
 

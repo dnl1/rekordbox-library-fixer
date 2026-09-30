@@ -152,6 +152,11 @@ The conversion uses a bundled [ffmpeg](https://ffmpeg.org/): the [ffmpeg-static 
 ### Backups
 A backup manager reachable at any time, with or without a library loaded. Lists every backup the app has taken, restores one (writing a safety copy of the current state first), and asks whether you want to load the restored library straight away.
 
+### Navidrome
+Import tracks and playlists from your own [Navidrome](https://www.navidrome.org/) server into rekordbox. Type the server address, username and password in **Settings → Navidrome**: the password is checked against the server, then kept on this computer only, encrypted by the system keychain — the server receives a one-time token, never the password itself.
+
+The **Navidrome** page lists your playlists and searches your songs. Pick any of either, and **Import into rekordbox** downloads the original files — never transcoded — into a folder (by default `Navidrome` in your Music folder), keeping the server's Artist/Album folders, and adds them to rekordbox's database: a playlist as a playlist of the same name, in the same order, and searched songs to the collection. rekordbox analyses the new tracks itself the first time it opens them. Formats rekordbox cannot play, such as Ogg and Opus, are left on the server. rekordbox must be closed, a backup is taken first, and a file an earlier run already downloaded is used instead of fetched again. For rekordbox's database only.
+
 ### Settings
 Every setting in one place, reached from the sidebar with or without a library loaded. A menu on the left picks the section: **Duplicate Detection** (detection methods, which copy is kept, path preferences), **Track Relocation** (where missing tracks are searched for, and how close a match must be) and **Performance** (how many files the Maintenance tools work on at once). The Settings buttons on the Duplicates and Relocate pages open their own section.
 
