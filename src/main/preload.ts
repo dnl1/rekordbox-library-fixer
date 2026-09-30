@@ -4,6 +4,7 @@ import type {
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
   ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
   AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
+  UpdateDownloadProgress, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress,
 } from './ipcContract';
 
 // Expose protected methods that allow the renderer process to use
@@ -179,6 +180,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, progress: AutoHotCueProgress) => callback(progress);
     ipcRenderer.on('auto-hot-cue-progress', handler);
     return () => { ipcRenderer.removeListener('auto-hot-cue-progress', handler); };
+  },
+
+  // Updates from the GitHub releases
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  cancelUpdateDownload: () => ipcRenderer.invoke('cancel-update-download'),
+  onUpdateDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: UpdateDownloadProgress) => callback(progress);
+    ipcRenderer.on('update-download-progress', handler);
+    return () => { ipcRenderer.removeListener('update-download-progress', handler); };
+  },
+  onShowUpdates: (callback: () => void) => {
+    ipcRenderer.on('show-updates', callback);
+    return () => ipcRenderer.removeListener('show-updates', callback);
+  },
+
+  // A playlist's files as a zip
+  choosePlaylistZipPath: (suggestedName: string) => ipcRenderer.invoke('choose-playlist-zip-path', suggestedName),
+  playlistZipPreview: (data: PlaylistZipPreviewRequest) => ipcRenderer.invoke('playlist-zip-preview', data),
+  exportPlaylistZip: (data: PlaylistZipRequest) => ipcRenderer.invoke('export-playlist-zip', data),
+  cancelPlaylistZip: (operationId: string) => ipcRenderer.invoke('cancel-playlist-zip', operationId),
+  onPlaylistZipProgress: (callback: (progress: PlaylistZipProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: PlaylistZipProgress) => callback(progress);
+    ipcRenderer.on('playlist-zip-progress', handler);
+    return () => { ipcRenderer.removeListener('playlist-zip-progress', handler); };
   },
 
   // Native drag-and-drop

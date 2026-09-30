@@ -327,5 +327,76 @@ export interface AutoHotCueWriteSummary {
   backupPath: string;
 }
 
+/**
+ * How this build installs an update: run the installer (Windows), swap the
+ * app in place and restart (macOS .app, Linux AppImage), open a package for
+ * the system to install (.deb, .dmg), or not at all — a development build, or
+ * a release with nothing for this platform — leaving the release page.
+ */
+export type UpdateInstallMode = 'installer' | 'replace' | 'package' | 'manual';
+
+export interface UpdateCheckResult {
+  currentVersion: string;
+  available: boolean;
+  latest?: {
+    version: string;
+    name: string;
+    notes: string;
+    url: string;
+    publishedAt?: string;
+    prerelease: boolean;
+  };
+  install: UpdateInstallMode;
+  assetName?: string;
+  assetSize?: number;
+}
+
+export interface UpdateDownloadProgress {
+  received: number;
+  total: number;
+}
+
+export interface UpdateInstallResult {
+  mode: UpdateInstallMode;
+  /** True when the app is about to quit for the installer or the swap. */
+  quitting: boolean;
+  /** The downloaded file, for a package the system opened. */
+  filePath?: string;
+}
+
+/** A playlist on its way into a zip: its tracks, in playlist order. */
+export interface PlaylistZipPreviewRequest {
+  tracks: TrackPayload[];
+  numbered: boolean;
+}
+
+export interface PlaylistZipPreview {
+  files: number;
+  totalSizeBytes: number;
+  skipped: Array<{ location: string; reason: string }>;
+}
+
+export interface PlaylistZipRequest extends PlaylistZipPreviewRequest {
+  operationId: string;
+  outputPath: string;
+}
+
+export interface PlaylistZipProgress {
+  operationId: string;
+  current: number;
+  total: number;
+  currentFile: string;
+  bytesWritten: number;
+  totalBytes: number;
+}
+
+export interface PlaylistZipSummary {
+  outputPath: string;
+  filesAdded: number;
+  bytes: number;
+  skipped: Array<{ location: string; reason: string }>;
+  cancelled: boolean;
+}
+
 /** Unsubscribes an event listener registered through the bridge. */
 export type Unsubscribe = () => void;

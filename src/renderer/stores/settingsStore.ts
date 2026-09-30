@@ -17,6 +17,8 @@ interface SettingsState {
   consolidateDestination: string;
   /** How many files the Maintenance tools work on at once — conversion, cleanup, audio analysis. */
   workers: number;
+  /** Look for a newer release on GitHub each time the app starts. */
+  checkUpdatesOnStart: boolean;
 
   // Actions
   setScanOptions: (options: ScanOptions) => void;
@@ -24,6 +26,7 @@ interface SettingsState {
   setRekordboxDbKey: (key: string) => void;
   setConsolidateDestination: (folder: string) => void;
   setWorkers: (workers: number) => void;
+  setCheckUpdatesOnStart: (check: boolean) => void;
   updateScanOption: <K extends keyof ScanOptions>(key: K, value: ScanOptions[K]) => void;
   addPathPreference: (path: string) => void;
   removePathPreference: (index: number) => void;
@@ -50,6 +53,7 @@ export const useSettingsStore = create<SettingsState>()(
       rekordboxDbKey: '',
       consolidateDestination: '',
       workers: DEFAULT_WORKERS,
+      checkUpdatesOnStart: true,
       relocationOptions: {
         searchPaths: [],
         searchDepth: 8,
@@ -74,6 +78,8 @@ export const useSettingsStore = create<SettingsState>()(
       setConsolidateDestination: (folder) => set({ consolidateDestination: folder }),
 
       setWorkers: (workers) => set({ workers: clampWorkers(workers) }),
+
+      setCheckUpdatesOnStart: (check) => set({ checkUpdatesOnStart: check }),
 
       updateScanOption: (key, value) => {
         console.log(`🔧 Zustand: Updating scan option ${key}:`, value);

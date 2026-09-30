@@ -12,6 +12,8 @@ import { registerBackupIpc } from './ipc/backups';
 import { registerSystemIpc } from './ipc/system';
 import { registerConversionIpc } from './ipc/conversion';
 import { registerHotCueIpc } from './ipc/hotCues';
+import { registerUpdateIpc } from './ipc/updates';
+import { registerExportIpc } from './ipc/export';
 
 
 // Must run before app ready — grants media:// streaming + fetch privileges.
@@ -137,6 +139,12 @@ function createMenu() {
           }
         },
         {
+          label: 'Check for Updates…',
+          click: () => {
+            mainWindow?.webContents.send('show-updates');
+          }
+        },
+        {
           label: 'XML Export & Import Tutorial',
           click: () => {
             mainWindow?.webContents.send('show-tutorial');
@@ -217,6 +225,12 @@ function createMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Check for Updates…',
+          click: () => {
+            mainWindow?.webContents.send('show-updates');
+          }
+        },
+        {
           label: 'About Rekordbox Library Fixer',
           click: () => {
             mainWindow?.webContents.send('show-about');
@@ -288,6 +302,8 @@ app.whenReady().then(async () => {
   registerSystemIpc();
   registerConversionIpc();
   registerHotCueIpc();
+  registerUpdateIpc();
+  registerExportIpc();
 
   // Database storage is now handled via Dexie in the renderer process
   safeConsole.log('✅ Application initialized');

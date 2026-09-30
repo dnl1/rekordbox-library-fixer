@@ -3,6 +3,8 @@ import type {
   IpcResult, RecoveredDbKey, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
   FlacCleanupPreview, FlacCleanupRequest, FlacCleanupProgress, FlacCleanupSummary,
   AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary, AutoHotCueProgress,
+  UpdateCheckResult, UpdateDownloadProgress, UpdateInstallResult,
+  PlaylistZipPreview, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress, PlaylistZipSummary,
 } from '../../main/ipcContract';
 
 export type TabType = 'duplicates' | 'import' | 'relocate' | 'maintenance' | 'statistics' | 'history' | 'backups' | 'library';
@@ -271,6 +273,18 @@ declare global {
       autoHotCueWrite: (data: AutoHotCueWriteRequest) => Promise<IpcResult<AutoHotCueWriteSummary>>;
       cancelAutoHotCue: (operationId: string) => Promise<{ success: boolean }>;
       onAutoHotCueProgress: (callback: (progress: AutoHotCueProgress) => void) => () => void;
+      // Updates
+      checkForUpdates: () => Promise<IpcResult<UpdateCheckResult>>;
+      installUpdate: () => Promise<IpcResult<UpdateInstallResult>>;
+      cancelUpdateDownload: () => Promise<{ success: boolean }>;
+      onUpdateDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => () => void;
+      onShowUpdates?: (callback: () => void) => () => void;
+      // Playlist → ZIP
+      choosePlaylistZipPath: (suggestedName: string) => Promise<IpcResult<{ filePath: string | null }>>;
+      playlistZipPreview: (data: PlaylistZipPreviewRequest) => Promise<IpcResult<PlaylistZipPreview>>;
+      exportPlaylistZip: (data: PlaylistZipRequest) => Promise<IpcResult<PlaylistZipSummary>>;
+      cancelPlaylistZip: (operationId: string) => Promise<{ success: boolean }>;
+      onPlaylistZipProgress: (callback: (progress: PlaylistZipProgress) => void) => () => void;
       // File Drop APIs
       handleNativeDrop: (filePaths: string[]) => Promise<{ success: boolean; data?: { filePaths: string[]; filePath?: string }; error?: string }>;
       onNativeFileDrop: (callback: (filePaths: string[]) => void) => () => void;

@@ -3,7 +3,9 @@ import { useLocation, Outlet, useNavigate } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLibrary, useNotifications } from './hooks';
 import { useRouteData } from './hooks/useRouteData';
-import { NotificationToast, AppFooter, SplashScreen, AboutModal, TutorialModal, SkeletonCard, NativeDropHandler, MiniPlayer } from './components/ui';
+import { NotificationToast, AppFooter, SplashScreen, AboutModal, UpdateModal, TutorialModal, SkeletonCard, NativeDropHandler, MiniPlayer } from './components/ui';
+import { useSettingsStore } from './stores/settingsStore';
+import { checkForUpdates, openUpdateDialog } from './updates/updateSession';
 import { Library } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import type { TabType, LibraryData, NotificationType } from './types';
@@ -92,6 +94,23 @@ const AppWithRouter: React.FC = () => {
         removeAboutListener();
       };
     }
+  }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.onShowUpdates) {
+      return window.electronAPI.onShowUpdates(openUpdateDialog);
+    }
+  }, []);
+
+  // Once per start, and quietly: only a newer version is worth a word.
+  useEffect(() => {
+    if (!useSettingsStore.getState().checkUpdatesOnStart || !window.electronAPI?.checkForUpdates) { return; }
+    void checkForUpdates({ silent: true }).then((result) => {
+      if (result?.available && result.latest) {
+        showNotification('info', `Version ${result.latest.version} is available — click UPDATE in the status bar to install it.`);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Set up tutorial menu event listener
@@ -199,6 +218,8 @@ const AppWithRouter: React.FC = () => {
 
       {/* About Modal */}
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
+
+      <UpdateModal />
 
       {/* Tutorial Modal */}
       <TutorialModal isOpen={showTutorial} onClose={() => setShowTutorial(false)} />

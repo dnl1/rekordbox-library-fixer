@@ -145,6 +145,24 @@ collection has to go through the database.
   FLACs and Auto hot cues work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
   `runPool` reports how many are busy, and every run's progress shows it. On a real library, 1332 tracks' bass
   analysis took 6.5 minutes with four.
+- **Updates** (`src/main/appUpdate.ts`, `ipc/updates.ts`, `src/renderer/updates/updateSession.ts`,
+  `components/ui/UpdateModal.tsx`): new versions from the GitHub releases of `dnl1/rekordbox-library-fixer`
+  (`UPDATE_REPO`; `build.publish` points there too). Not electron-updater: its macOS path needs a signed app. A beta
+  build follows betas, a stable one stable releases only. Every download is checked against the SHA-256 GitHub records
+  per asset (`digest`) under a `.part` name; one with no digest is refused. Installing: Windows runs the NSIS setup
+  (`--updated /S --force-run`) and quits; macOS extracts the `-mac.zip` for its arch and a detached script swaps the
+  `.app` once the app has exited (old bundle put back on failure), or opens the DMG when the bundle is translocated or
+  not writable; an AppImage is replaced beside itself and relaunched; otherwise the `.deb` is opened. A development
+  build only shows the release page. Checked quietly at start (`checkUpdatesOnStart`), from Help → Check for Updates,
+  and the footer shows a waiting version.
+- **Playlist → ZIP** (`src/main/zipWriter.ts`, `playlistZip.ts`, `ipc/export.ts`,
+  `components/maintenance/ExportPlaylistZipPanel.tsx`, `export/playlistZipSession.ts`): a playlist's (or folder's)
+  audio files, flat, in one zip — nothing else, and the library is not touched. The writer is our own: stored (audio is
+  already compressed), ZIP64 when a size or offset needs it, one file open at a time, the CRC patched into each local
+  header afterwards rather than a data descriptor. Missing and streaming entries are left out and listed; one file
+  shared by two entries goes in once; two files of one name become `Name (2).ext` (case-insensitive); names Windows
+  cannot hold get `_`; optional `01 ` numbering in playlist order. Built as `.part`, renamed when complete, removed on
+  cancel or failure.
 - **Paths under WSL** (`src/main/hostPath.ts`): a Windows library stores `C:/Users/…` (forward slashes),
   which Linux under WSL reaches only as `/mnt/c/Users/…` (or the `[automount] root` in `/etc/wsl.conf`).
   `toHostPath()` translates for file access only; what is written back into the library keeps rekordbox's
@@ -325,6 +343,10 @@ exposed through `window.electronAPI`:
 - `autoRelocateTracks(tracks, options, libraryPath)`: Sequential auto-relocation with progress tracking
 - `cancelAutoRelocate(operationId)`: Cancel active auto-relocation operation
 - `showFileInFolder(path)`: Open file location in system file manager; reports back when the file is gone
+- `checkForUpdates()` / `installUpdate()` / `cancelUpdateDownload()` / `onUpdateDownloadProgress(cb)`: updates from
+  the GitHub releases; the menu's Check for Updates arrives as `onShowUpdates`
+- `choosePlaylistZipPath(name)` / `playlistZipPreview(data)` / `exportPlaylistZip(request)` / `cancelPlaylistZip(id)` /
+  `onPlaylistZipProgress(cb)`: a playlist's files as a zip
 - `convertFlacPreview(data)` / `convertFlac(request)` / `cancelConvertFlac(id)` / `onConvertFlacProgress(cb)`:
   FLAC conversion, writing into `master.db` or the XML depending on what is open
 - `autoHotCuePreview(request)` / `autoHotCueWrite(request)`: suggest hot cues from the phrase analysis (read on a

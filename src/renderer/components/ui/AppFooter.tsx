@@ -1,7 +1,8 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useSyncExternalStore } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { ChevronDown, Music, Folder, X } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { subscribeUpdates, getUpdateSnapshot, openUpdateDialog } from '../../updates/updateSession';
 import type { LibraryData, Playlist } from '../../types';
 
 interface AppFooterProps {
@@ -65,6 +66,8 @@ const PlaylistTree: React.FC<{ playlists: Playlist[]; level?: number }> = ({
 const AppFooterComponent = React.memo(({ libraryData }: AppFooterProps) => {
   const version = useAppStore((state) => state.version);
   const loadVersion = useAppStore((state) => state.loadVersion);
+  const update = useSyncExternalStore(subscribeUpdates, getUpdateSnapshot);
+  const newVersion = update.result?.available ? update.result.latest?.version : undefined;
 
   const playlistStats = useMemo(() => {
     if (!libraryData || !libraryData.playlists) {
@@ -152,8 +155,13 @@ const AppFooterComponent = React.memo(({ libraryData }: AppFooterProps) => {
           )}
         </div>
 
-        <div className="font-te-mono text-xs text-te-grey-500 uppercase tracking-wider">
-          V{version} • (C) Koray Sels {new Date().getFullYear()}
+        <div className="font-te-mono text-xs text-te-grey-500 uppercase tracking-wider flex items-center gap-te-md">
+          {newVersion && (
+            <button onClick={openUpdateDialog} className="text-te-orange hover:underline uppercase tracking-wider">
+              Update to V{newVersion}
+            </button>
+          )}
+          <span>V{version} • (C) Koray Sels {new Date().getFullYear()}</span>
         </div>
       </div>
     </div>
