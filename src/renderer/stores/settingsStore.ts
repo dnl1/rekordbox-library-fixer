@@ -21,6 +21,10 @@ interface SettingsState {
   checkUpdatesOnStart: boolean;
   /** Where Navidrome imports are downloaded. Empty means the default folder in Music. */
   navidromeDestination: string;
+  /** A Navidrome import turns FLAC, WAV and M4A into AIFF. The last choice made in its dialog. */
+  navidromeConvertToAiff: boolean;
+  /** A Navidrome import gets auto hot cues once rekordbox has analysed it. The last choice made in its dialog. */
+  navidromeAutoHotCues: boolean;
 
   // Actions
   setScanOptions: (options: ScanOptions) => void;
@@ -30,6 +34,7 @@ interface SettingsState {
   setWorkers: (workers: number) => void;
   setCheckUpdatesOnStart: (check: boolean) => void;
   setNavidromeDestination: (folder: string) => void;
+  setNavidromeImportOptions: (options: { convertToAiff: boolean; autoHotCues: boolean }) => void;
   updateScanOption: <K extends keyof ScanOptions>(key: K, value: ScanOptions[K]) => void;
   addPathPreference: (path: string) => void;
   removePathPreference: (index: number) => void;
@@ -58,6 +63,8 @@ export const useSettingsStore = create<SettingsState>()(
       workers: DEFAULT_WORKERS,
       checkUpdatesOnStart: true,
       navidromeDestination: '',
+      navidromeConvertToAiff: true,
+      navidromeAutoHotCues: true,
       relocationOptions: {
         searchPaths: [],
         searchDepth: 8,
@@ -86,6 +93,8 @@ export const useSettingsStore = create<SettingsState>()(
       setCheckUpdatesOnStart: (check) => set({ checkUpdatesOnStart: check }),
 
       setNavidromeDestination: (folder) => set({ navidromeDestination: folder }),
+      setNavidromeImportOptions: ({ convertToAiff, autoHotCues }) =>
+        set({ navidromeConvertToAiff: convertToAiff, navidromeAutoHotCues: autoHotCues }),
 
       updateScanOption: (key, value) => {
         console.log(`🔧 Zustand: Updating scan option ${key}:`, value);

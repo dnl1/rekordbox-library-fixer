@@ -1,5 +1,8 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { app, ipcMain, safeStorage } from 'electron';
+import { AudioConverter } from '../audioConverter';
+import { appFfmpegPath } from '../appFfmpeg';
 import { createSubsonicClient, normalizeServerUrl, type NavidromeConnection } from '../navidrome/subsonic';
 import { connectionPath, forgetConnection, loadConnection, saveConnection } from '../navidrome/credentials';
 import { downloadToFile } from '../navidrome/importFiles';
@@ -96,6 +99,7 @@ export function registerNavidromeIpc(): void {
     const cancelToken = { cancelled: false, controller: new AbortController() };
     cancelTokens.set(operationId, cancelToken);
     try {
+      const ffmpeg = appFfmpegPath();
       const summary = await runNavidromeImport(request, {
         client: createSubsonicClient(savedConnection()),
         download: downloadToFile,
@@ -105,6 +109,11 @@ export function registerNavidromeIpc(): void {
         isRekordboxRunning,
         onProgress: (progress) => event.sender.send('navidrome-import-progress', progress),
         cancelToken,
+        convertToAiff: ffmpeg
+          ? (plan, onProgress, token, workers) => new AudioConverter(ffmpeg).convert(plan, 'aiff', onProgress, token, workers)
+          : undefined,
+        // Not the trash: these are this run's own downloads, and the server keeps the original.
+        removeFile: (file) => fs.promises.rm(file, { force: true }),
       });
       return { success: true, data: summary };
     } catch (error) {

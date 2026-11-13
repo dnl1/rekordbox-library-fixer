@@ -6,36 +6,54 @@ import { formatFileSize } from '../../utils';
 import { playlistScopes } from '../../utils/playlistScopes';
 import {
   subscribeConversion, getConversionSnapshot, startConversion, cancelConversion, resetConversionSession,
-} from '../../conversion/convertFlacSession';
-import type { ConversionFormatPayload, ConvertFlacPreview } from '../../../main/ipcContract';
+} from '../../conversion/convertAudioSession';
+import type { ConversionFormatPayload, ConversionSourcePayload, ConvertAudioPreview } from '../../../main/ipcContract';
 import { ActiveWorkers } from './shared';
 
 type Phase = 'idle' | 'previewing' | 'previewed' | 'confirming' | 'running' | 'done';
 
 const FORMATS: Array<{ value: ConversionFormatPayload; label: string; desc: string }> = [
-  { value: 'aiff', label: 'AIFF', desc: 'Lossless, sample-exact. Keeps tags and artwork — the one to pick.' },
-  { value: 'wav', label: 'WAV', desc: 'Lossless, sample-exact. Tags and artwork mostly do not survive.' },
+  { value: 'aiff', label: 'AIFF', desc: 'Uncompressed. Keeps tags and artwork — the one to pick.' },
+  { value: 'wav', label: 'WAV', desc: 'Uncompressed. Tags and artwork mostly do not survive.' },
   { value: 'mp3', label: 'MP3 320 kbps', desc: 'A quarter of the size. Lossy, and cues can land a few ms late.' },
 ];
 
+const SOURCES: Array<{ value: ConversionSourcePayload; label: string }> = [
+  { value: 'flac', label: 'FLAC' },
+  { value: 'wav', label: 'WAV' },
+  { value: 'm4a', label: 'M4A' },
+];
+
+const ALL_SOURCES = SOURCES.map((s) => s.value);
+
+/** "8 FLAC, 3 WAV, 1 M4A" — only the kinds there are. */
+const byKind = (preview: ConvertAudioPreview): string =>
+  SOURCES.filter((s) => (preview.filesByKind?.[s.value] ?? 0) > 0)
+    .map((s) => `${preview.filesByKind[s.value]} ${s.label}`)
+    .join(', ');
+
 /**
- * Convert the library's FLAC files for players that cannot read FLAC — older
- * CDJs and XDJs — and point every entry at the converted file, keeping its
+ * Convert the library's FLAC, WAV and M4A files for players that cannot read
+ * them well — older CDJs and XDJs play neither FLAC nor ALAC, and WAV carries
+ * almost no tags — and point every entry at the converted file, keeping its
  * cues, beatgrid and playlists.
  *
  * The originals stay unless asked otherwise, and even then go to the trash,
  * only once the library points at the conversion. The run itself lives in
- * `convertFlacSession`, so its progress and result survive this panel.
+ * `convertAudioSession`, so its progress and result survive this panel.
  */
-export const ConvertFlacPanel: React.FC = () => {
+export const ConvertAudioPanel: React.FC = () => {
   const { libraryData, libraryPath, showNotification, onLoadLibrary } = useAppContext();
   const session = useSyncExternalStore(subscribeConversion, getConversionSnapshot);
   const mine = session.libraryPath === libraryPath;
 
   const [format, setFormat] = useState<ConversionFormatPayload>(() => (mine && session.format) || 'aiff');
+  const [sources, setSources] = useState<ConversionSourcePayload[]>(ALL_SOURCES);
+  // A WAV is never converted to WAV, whatever is ticked.
+  const activeSources = useMemo(() => sources.filter((s) => s !== format), [sources, format]);
   const [trashOriginals, setTrashOriginals] = useState(false);
   const [localPhase, setLocalPhase] = useState<Phase>('idle');
-  const [preview, setPreview] = useState<ConvertFlacPreview | null>(null);
+  const [preview, setPreview] = useState<ConvertAudioPreview | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const running = mine && session.running;
@@ -59,11 +77,11 @@ export const ConvertFlacPanel: React.FC = () => {
   }, []);
 
   /** Returns the preview so Convert can run one itself when none was asked for. */
-  const runPreview = useCallback(async (): Promise<ConvertFlacPreview | null> => {
+  const runPreview = useCallback(async (): Promise<ConvertAudioPreview | null> => {
     resetConversionSession();
     setLocalPhase('previewing');
     setLocalError(null);
-    const res = await window.electronAPI.convertFlacPreview({ tracks, format, scopeTrackIds });
+    const res = await window.electronAPI.convertAudioPreview({ tracks, format, scopeTrackIds, sources: activeSources });
     if (res.success && res.data) {
       setPreview(res.data);
       setLocalPhase('previewed');
@@ -72,7 +90,7 @@ export const ConvertFlacPanel: React.FC = () => {
     setLocalError(res.error ?? 'Preview failed');
     setLocalPhase('idle');
     return null;
-  }, [tracks, format, scopeTrackIds]);
+  }, [tracks, format, scopeTrackIds, activeSources]);
 
   // Convert used to stay greyed out until Preview had been pressed, which
   // nothing on screen said. It previews by itself now, then asks to confirm.
@@ -101,6 +119,7 @@ export const ConvertFlacPanel: React.FC = () => {
       libraryPath,
       dbKey: isDatabase ? useSettingsStore.getState().rekordboxDbKey : undefined,
       format,
+      sources: activeSources,
       trashOriginals: trashOriginals && isDatabase,
       workers: useSettingsStore.getState().workers,
     });
@@ -121,7 +140,7 @@ export const ConvertFlacPanel: React.FC = () => {
       { important: true }
     );
     if (s.tracksUpdated > 0) { onLoadLibrary?.(libraryPath); }
-  }, [isDatabase, tracks, scopeTrackIds, libraryPath, format, trashOriginals, showNotification, onLoadLibrary]);
+  }, [isDatabase, tracks, scopeTrackIds, libraryPath, format, activeSources, trashOriginals, showNotification, onLoadLibrary]);
 
   const cancel = useCallback(() => { void cancelConversion(); }, []);
 
@@ -130,10 +149,11 @@ export const ConvertFlacPanel: React.FC = () => {
 
   return (
     <div className="bg-white rounded-te shadow-sm p-te-md mt-te-md">
-      <h3 className="font-semibold text-te-grey-800 mb-1">Convert FLAC</h3>
+      <h3 className="font-semibold text-te-grey-800 mb-1">Convert audio</h3>
       <p className="text-sm text-te-grey-500 font-te-mono mb-te-md">
-        Older CDJs and XDJs cannot play FLAC. This converts each FLAC to a file beside it and points
-        the library at it — cues, beatgrid and playlists stay with the track.
+        Older CDJs and XDJs cannot play FLAC or ALAC, and WAV carries almost no tags. This converts each
+        FLAC, WAV and M4A to a file beside it and points the library at it — cues, beatgrid and playlists
+        stay with the track.
       </p>
 
       {!libraryData ? (
@@ -161,6 +181,34 @@ export const ConvertFlacPanel: React.FC = () => {
               rekordbox as usual — it copies the converted files.
             </p>
           </div>
+
+          <fieldset disabled={phase === 'running'}>
+            <legend className="block text-xs font-medium text-te-grey-600 mb-2 uppercase">Convert from</legend>
+            <div className="flex flex-wrap gap-4">
+              {SOURCES.map((opt) => (
+                <label key={opt.value} htmlFor={`convert-source-${opt.value}`} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    id={`convert-source-${opt.value}`}
+                    type="checkbox"
+                    checked={sources.includes(opt.value) && opt.value !== format}
+                    disabled={opt.value === format}
+                    onChange={(e) => {
+                      const { checked } = e.target;
+                      setSources((prev) => (checked ? [...prev, opt.value] : prev.filter((s) => s !== opt.value)));
+                      reset();
+                    }}
+                    className="accent-te-orange"
+                  />
+                  <span className="text-sm font-medium text-te-grey-800">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs font-te-mono text-te-grey-400 mt-1">
+              An M4A holds ALAC or AAC. ALAC converts sample-exact; AAC is already lossy, so its AIFF or WAV
+              sounds the same, only bigger, and cues can land a few ms late.
+              {format === 'wav' ? ' WAV files are already WAV and stay as they are.' : ''}
+            </p>
+          </fieldset>
 
           <fieldset disabled={phase === 'running'}>
             <legend className="block text-xs font-medium text-te-grey-600 mb-2 uppercase">Convert to</legend>
@@ -195,18 +243,18 @@ export const ConvertFlacPanel: React.FC = () => {
                 onChange={(e) => setTrashOriginals(e.target.checked)}
                 className="accent-te-orange"
               />
-              <span className="text-sm text-te-grey-700">Move the FLAC originals to the trash afterwards</span>
+              <span className="text-sm text-te-grey-700">Move the originals to the trash afterwards</span>
             </label>
             {!isDatabase && (
               <p className="text-xs font-te-mono text-te-grey-400 mt-1 ml-6">
                 Only when converting rekordbox&apos;s own database: after an XML conversion, rekordbox still
-                points at the FLACs.
+                points at the originals.
               </p>
             )}
             {trashOriginals && isDatabase && format === 'mp3' && (
               <p className="text-xs font-te-mono text-te-amber-600 mt-1 ml-6">
                 <AlertTriangle size={12} className="inline mr-1" />
-                MP3 is lossy: once the trash is emptied, the FLAC was the only lossless copy.
+                MP3 is lossy: once the trash is emptied, a FLAC, WAV or ALAC original was the only lossless copy.
               </p>
             )}
           </div>
@@ -214,7 +262,7 @@ export const ConvertFlacPanel: React.FC = () => {
           {!isDatabase && (
             <p className="text-xs font-te-mono text-te-grey-500">
               This library is an XML export. Importing it into rekordbox adds the converted files as new
-              tracks next to the FLACs rather than replacing them — open rekordbox&apos;s database here
+              tracks next to the originals rather than replacing them — open rekordbox&apos;s database here
               instead to convert in place.
             </p>
           )}
@@ -226,13 +274,14 @@ export const ConvertFlacPanel: React.FC = () => {
               ) : (
                 <>
                   <div>
-                    {preview.files} FLAC file{preview.files === 1 ? '' : 's'} to convert{scope ? ` in ${scope.label}` : ''}
-                    {' '}— {formatFileSize(preview.totalSizeBytes)}, {preview.flacTracks} entr{preview.flacTracks === 1 ? 'y' : 'ies'}
+                    {preview.files} file{preview.files === 1 ? '' : 's'} to convert{scope ? ` in ${scope.label}` : ''}
+                    {byKind(preview) ? ` (${byKind(preview)})` : ''}
+                    {' '}— {formatFileSize(preview.totalSizeBytes)}, {preview.sourceTracks} entr{preview.sourceTracks === 1 ? 'y' : 'ies'}
                   </div>
                   {preview.reusable > 0 && (
                     <div className="text-te-grey-600">
                       {preview.reusable} already have a .{format} from an earlier run — each is checked
-                      against its FLAC and used as it is if identical, left alone if not
+                      against its original and used as it is if identical, left alone if not
                     </div>
                   )}
                   {nothingToDo && (
@@ -244,7 +293,7 @@ export const ConvertFlacPanel: React.FC = () => {
                     </div>
                   )}
                   {preview.missing > 0 && (
-                    <div className="text-te-grey-400">{preview.missing} FLAC files not found (will be skipped)</div>
+                    <div className="text-te-grey-400">{preview.missing} files not found (will be skipped)</div>
                   )}
                 </>
               )}

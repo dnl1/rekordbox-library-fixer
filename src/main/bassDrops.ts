@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import type { GridBeat } from './anlzReader';
-import type { CancelToken } from './flacConverter';
+import type { CancelToken } from './audioConverter';
 
 /**
  * Find the drops in a track by its bass: where the kick and the bassline come

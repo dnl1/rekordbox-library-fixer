@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isStreamingLocation } from './brokenEntries';
-import type { CancelToken } from './flacConverter';
+import type { CancelToken } from './audioConverter';
 import { runPool } from './workerPool';
 
 /**

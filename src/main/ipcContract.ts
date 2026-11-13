@@ -161,17 +161,23 @@ export interface RecoveredDbKey {
 
 export type ConversionFormatPayload = 'aiff' | 'wav' | 'mp3';
 
-/** What a FLAC conversion would do, before it runs. */
-export interface ConvertFlacPreview {
+/** The files Convert reads: FLAC, WAV, and M4A (AAC or ALAC). */
+export type ConversionSourcePayload = 'flac' | 'wav' | 'm4a';
+
+/** What a conversion would do, before it runs. */
+export interface ConvertAudioPreview {
   /** False when this build carries no ffmpeg for the platform it runs on. */
   available: boolean;
-  flacTracks: number;
-  /** Distinct files: entries sharing one FLAC share its conversion. Includes `reusable`. */
+  /** Entries pointing at a file that would be converted, found or not. */
+  sourceTracks: number;
+  /** Distinct files: entries sharing one file share its conversion. Includes `reusable`. */
   files: number;
+  /** Of `files`, how many of each kind. */
+  filesByKind: Record<ConversionSourcePayload, number>;
   /**
    * Of those, the ones whose AIFF or WAV is already there — usually a run that
    * stopped before it wrote the library. Each is used if it decodes to exactly
-   * the FLAC's audio, and left alone if not.
+   * the original's audio, and left alone if not.
    */
   reusable: number;
   missing: number;
@@ -180,7 +186,7 @@ export interface ConvertFlacPreview {
   totalSizeBytes: number;
 }
 
-export interface ConvertFlacRequest {
+export interface ConvertAudioRequest {
   operationId: string;
   /** The whole library, always: an original is trashed only if nothing else uses it. */
   tracks: TrackPayload[];
@@ -190,17 +196,19 @@ export interface ConvertFlacRequest {
   /** Required when `libraryPath` is a master.db. */
   dbKey?: string;
   format: ConversionFormatPayload;
+  /** Which kinds of file to convert; all of them when absent. A file already in `format` never is. */
+  sources?: ConversionSourcePayload[];
   /**
    * Move each original to the trash once every entry points at its conversion.
    * Honoured for master.db only: after an XML conversion rekordbox's own
-   * database still points at the FLACs.
+   * database still points at the originals.
    */
   trashOriginals: boolean;
   /** How many files are converted at once. */
   workers?: number;
 }
 
-export interface ConvertFlacProgress {
+export interface ConvertAudioProgress {
   operationId: string;
   current: number;
   total: number;
@@ -212,7 +220,7 @@ export interface ConvertFlacProgress {
   failed: number;
 }
 
-export interface ConvertFlacSummary {
+export interface ConvertAudioSummary {
   filesConverted: number;
   tracksUpdated: number;
   skipped: Array<{ trackId: string; location?: string; reason: string }>;
@@ -310,6 +318,8 @@ export interface AutoHotCuePreview {
   notAnalysed: number;
   /** Cued from the phrases alone: the audio could not be read for drops, or this build has no ffmpeg. */
   withoutDrops: number;
+  /** Of `notAnalysed`, the tracks with no analysis files at all yet — rekordbox has not analysed them. */
+  waitingIds: string[];
   cancelled: boolean;
 }
 
@@ -461,11 +471,18 @@ export interface NavidromeImportRequest {
   playlistIds: string[];
   /** Added to the collection only. */
   songIds: string[];
+  /**
+   * Convert each FLAC, WAV and M4A to AIFF after downloading it, and import
+   * the AIFF instead. MP3 and AIFF are imported as they are.
+   */
+  convertToAiff?: boolean;
+  /** How many files are converted at once. */
+  workers?: number;
 }
 
 export interface NavidromeImportProgress {
   operationId: string;
-  phase: 'listing' | 'downloading' | 'writing';
+  phase: 'listing' | 'downloading' | 'converting' | 'writing';
   current: number;
   total: number;
   currentFile: string;
@@ -480,6 +497,12 @@ export interface NavidromeImportSummary {
   tracksAdded: number;
   /** Already in the collection at the same location. */
   tracksAlreadyThere: number;
+  /** `djmdContent.ID` of every imported track, added or already there — what auto hot cues waits on. */
+  trackIds: string[];
+  /** Songs imported as AIFF. */
+  convertedToAiff: number;
+  /** Songs that were to become AIFF and were imported as they are instead, and why. */
+  notConverted: Array<{ title: string; reason: string }>;
   playlists: Array<{ name: string; tracks: number }>;
   backupPath?: string;
   playlistFileUpdated: boolean;

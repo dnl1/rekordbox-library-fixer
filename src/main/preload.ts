@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
-  ConversionFormatPayload, ConvertFlacRequest, ConvertFlacProgress, FlacCleanupRequest, FlacCleanupProgress,
+  ConversionFormatPayload, ConversionSourcePayload, ConvertAudioRequest, ConvertAudioProgress, FlacCleanupRequest, FlacCleanupProgress,
   AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
   UpdateDownloadProgress, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress,
   PlayHistoryRequest, NavidromeConnectionRequest, NavidromeImportRequest, NavidromeImportProgress,
@@ -154,18 +154,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => { ipcRenderer.removeListener('filter-progress', handler); };
   },
 
-  // FLAC → AIFF / WAV
-  convertFlacPreview: (data: { tracks: TrackPayload[]; format: ConversionFormatPayload; scopeTrackIds?: string[] }) =>
-    ipcRenderer.invoke('convert-flac-preview', data),
-  convertFlac: (data: ConvertFlacRequest) => ipcRenderer.invoke('convert-flac', data),
-  cancelConvertFlac: (operationId: string) =>
-    ipcRenderer.invoke('cancel-convert-flac', operationId),
-  onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => {
-    const handler = (_: Electron.IpcRendererEvent, progress: ConvertFlacProgress) => callback(progress);
-    ipcRenderer.on('convert-flac-progress', handler);
-    return () => { ipcRenderer.removeListener('convert-flac-progress', handler); };
+  // FLAC, WAV and M4A → AIFF, WAV or MP3
+  convertAudioPreview: (data: { tracks: TrackPayload[]; format: ConversionFormatPayload; scopeTrackIds?: string[]; sources?: ConversionSourcePayload[] }) =>
+    ipcRenderer.invoke('convert-audio-preview', data),
+  convertAudio: (data: ConvertAudioRequest) => ipcRenderer.invoke('convert-audio', data),
+  cancelConvertAudio: (operationId: string) =>
+    ipcRenderer.invoke('cancel-convert-audio', operationId),
+  onConvertAudioProgress: (callback: (progress: ConvertAudioProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: ConvertAudioProgress) => callback(progress);
+    ipcRenderer.on('convert-audio-progress', handler);
+    return () => { ipcRenderer.removeListener('convert-audio-progress', handler); };
   },
-  // The FLACs a conversion left behind. Cancelled through cancelConvertFlac.
+  // The FLACs a conversion left behind. Cancelled through cancelConvertAudio.
   cleanupFlacPreview: (data: { tracks: TrackPayload[] }) => ipcRenderer.invoke('cleanup-flac-preview', data),
   cleanupFlac: (data: FlacCleanupRequest) => ipcRenderer.invoke('cleanup-flac', data),
   onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => {

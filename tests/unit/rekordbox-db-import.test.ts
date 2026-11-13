@@ -67,6 +67,12 @@ describe('applyImport', () => {
     expect(c.rb_file_id).not.toBe(c.ID);
   });
 
+  it('names every imported track, new or already there, for whatever waits on them', () => {
+    // Auto hot cues waits on these ids until rekordbox has analysed the tracks.
+    const out = applyImport(db, [track('/dl/new.flac'), track('/music/existing.mp3'), track('/dl/new.flac')], [], now, counter());
+    expect(out.contentIds).toEqual([row('djmdContent', 'FolderPath = ?', '/dl/new.flac').ID, '800']);
+  });
+
   it('uses the artist already there and creates the album and genre', () => {
     applyImport(db, [track('/dl/a.flac')], [], now, counter());
     expect(count('djmdArtist')).toBe(1);
@@ -94,7 +100,7 @@ describe('applyImport', () => {
 
   it('uses a track already in the collection at the same place', () => {
     const out = applyImport(db, [track('/music/existing.mp3')], [{ name: 'Old ones', locations: ['/music/existing.mp3'] }], now, counter());
-    expect(out).toMatchObject({ tracksAdded: 0, tracksAlreadyThere: 1 });
+    expect(out).toMatchObject({ tracksAdded: 0, tracksAlreadyThere: 1, contentIds: ['800'] });
     expect(count('djmdContent')).toBe(1);
     expect(row('djmdSongPlaylist', 'ContentID = ?', '800')).toBeTruthy();
   });

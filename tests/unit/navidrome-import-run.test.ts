@@ -7,6 +7,7 @@ import * as path from 'path';
 import { runNavidromeImport, type ImportDeps } from '../../src/main/navidrome/importRun';
 import type { SubsonicSong } from '../../src/main/navidrome/subsonic';
 import type { NavidromeImportRequest } from '../../src/main/ipcContract';
+import type { ConversionPlan, ConversionResult } from '../../src/main/audioConverter';
 
 const song = (id: string, over: Partial<SubsonicSong> = {}): SubsonicSong => ({
   id, title: `Title ${id}`, artist: 'Artist', album: 'Album', genre: 'Techno', suffix: 'mp3', size: 5,
@@ -35,6 +36,7 @@ function deps(over: Partial<ImportDeps> = {}) {
   }) as unknown as ImportDeps['download'];
   const writeDb = vi.fn((tracks: any[], lists: any[]) => ({
     tracksAdded: tracks.length, tracksAlreadyThere: 0, backupPath: '/b', playlistFileUpdated: true,
+    contentIds: tracks.map((_t: any, i: number) => String(100 + i)),
     playlists: lists.map((l: any, i: number) => ({ id: String(i + 1), name: l.name, tracks: l.locations.length, timestamp: 0 })),
   }));
   return {
@@ -129,6 +131,113 @@ describe('runNavidromeImport', () => {
 
   it('needs a folder to download to', async () => {
     await expect(runNavidromeImport(request({ destination: 'relative/dir' }), deps())).rejects.toThrow(/Choose the folder/);
+  });
+
+  describe('converting to AIFF', () => {
+    /** FLAC, WAV and M4A from the server, and an MP3 and an AIFF that stay as they are. */
+    const mixed = () => {
+      const files = { f: 'flac', w: 'wav', m: 'm4a', p: 'mp3', a: 'aiff' } as const;
+      const songs = Object.fromEntries(Object.entries(files).map(([id, suffix]) => [id, song(id, { suffix, path: `Artist/Album/${id}.${suffix}` })]));
+      const d = deps();
+      d.client.song = vi.fn(async (id: string) => songs[id]) as any;
+      return d;
+    };
+    /** Converts like the real thing: an AIFF beside each source, unless told to fail. */
+    const converter = (fail: string[] = []) => vi.fn(async (plan: ConversionPlan): Promise<ConversionResult> => {
+      const result: ConversionResult = { converted: [], skipped: [...plan.skipped], failed: [], cancelled: false };
+      for (const job of plan.jobs) {
+        if (fail.some((f) => job.source.endsWith(f))) { result.failed.push({ file: job.source, error: 'ffmpeg said no' }); continue; }
+        fs.writeFileSync(job.destination, 'aiff audio');
+        result.converted.push({
+          trackIds: job.trackIds, oldLocation: job.source, newLocation: job.destination, format: 'aiff',
+          size: 10, sampleRate: 48000, bitDepth: 24, bitRate: 2304,
+        });
+      }
+      return result;
+    });
+    const at = (name: string) => path.join(dest, 'Artist', 'Album', name);
+    const convertRequest = () => request({ playlistIds: [], songIds: ['f', 'w', 'm', 'p', 'a'], convertToAiff: true, workers: 2 });
+
+    it('imports FLAC, WAV and M4A as AIFF, and MP3 and AIFF as they are', async () => {
+      const convertToAiff = converter();
+      const d = { ...mixed(), convertToAiff, removeFile: vi.fn(async (f: string) => fs.rmSync(f)) };
+      const out = await runNavidromeImport(convertRequest(), d);
+
+      const plan = convertToAiff.mock.calls[0][0];
+      expect(plan.jobs.map((j) => path.basename(j.source))).toEqual(['f.flac', 'w.wav', 'm.m4a']);
+      expect(convertToAiff.mock.calls[0][3]).toBe(2);
+      const [tracks] = d.writeDb.mock.calls[0];
+      expect(tracks.map((t: any) => [path.basename(t.location), t.fileType])).toEqual([
+        ['f.aiff', 12], ['w.aiff', 12], ['m.aiff', 12], ['p.mp3', 1], ['a.aiff', 12],
+      ]);
+      expect(tracks[0]).toMatchObject({ fileSize: 10, sampleRate: 48000, bitDepth: 24, bitRate: 2304 });
+      expect(out).toMatchObject({ convertedToAiff: 3, notConverted: [], trackIds: ['100', '101', '102', '103', '104'] });
+    });
+
+    it('removes each original it downloaded, once the database points at its AIFF', async () => {
+      const removeFile = vi.fn(async (f: string) => fs.rmSync(f));
+      await runNavidromeImport(convertRequest(), { ...mixed(), convertToAiff: converter(), removeFile });
+      expect(removeFile.mock.calls.map((c) => path.basename(c[0])).sort()).toEqual(['f.flac', 'm.m4a', 'w.wav']);
+      expect(fs.existsSync(at('f.flac'))).toBe(false);
+      expect(fs.existsSync(at('f.aiff'))).toBe(true);
+      expect(fs.existsSync(at('p.mp3'))).toBe(true);
+    });
+
+    it('never removes a file that was in the folder before', async () => {
+      // It may be the user's own, or a track an earlier import added as FLAC.
+      fs.mkdirSync(path.dirname(at('f.flac')), { recursive: true });
+      fs.writeFileSync(at('f.flac'), 'audio');
+      const removeFile = vi.fn(async (f: string) => fs.rmSync(f));
+      await runNavidromeImport(convertRequest(), { ...mixed(), convertToAiff: converter(), removeFile });
+      expect(fs.existsSync(at('f.flac'))).toBe(true);
+      expect(removeFile.mock.calls.map((c) => path.basename(c[0])).sort()).toEqual(['m.m4a', 'w.wav']);
+    });
+
+    it('imports a file that would not convert as it is, and says so', async () => {
+      const removeFile = vi.fn(async (f: string) => fs.rmSync(f));
+      const d = { ...mixed(), convertToAiff: converter(['w.wav']), removeFile };
+      const out = await runNavidromeImport(convertRequest(), d);
+      const [tracks] = d.writeDb.mock.calls[0];
+      expect(tracks.find((t: any) => t.location === at('w.wav'))).toMatchObject({ fileType: 11 });
+      expect(out.notConverted).toEqual([{ title: 'Artist — Title w', reason: 'ffmpeg said no' }]);
+      expect(fs.existsSync(at('w.wav'))).toBe(true);
+    });
+
+    it('puts the AIFF in the playlist', async () => {
+      const d = { ...deps(), convertToAiff: converter(), removeFile: vi.fn(async () => undefined) };
+      d.client.playlist = vi.fn(async () => ({ name: 'Peak', songs: [song('f', { suffix: 'flac', path: 'Artist/Album/f.flac' })] })) as any;
+      await runNavidromeImport(request({ songIds: [], convertToAiff: true }), d);
+      const [, lists] = d.writeDb.mock.calls[0];
+      expect(lists[0].locations).toEqual([at('f.aiff')]);
+    });
+
+    it('writes and removes nothing when cancelled while converting', async () => {
+      const token = { cancelled: false };
+      const removeFile = vi.fn(async () => undefined);
+      const convertToAiff = vi.fn(async (plan: ConversionPlan): Promise<ConversionResult> => {
+        token.cancelled = true;
+        return { converted: [], skipped: plan.skipped, failed: [], cancelled: true };
+      });
+      const d = { ...mixed(), cancelToken: token, convertToAiff, removeFile };
+      const out = await runNavidromeImport(convertRequest(), d);
+      expect(out.cancelled).toBe(true);
+      expect(d.writeDb).not.toHaveBeenCalled();
+      expect(removeFile).not.toHaveBeenCalled();
+    });
+
+    it('refuses to start without an ffmpeg to convert with', async () => {
+      const d = mixed();
+      await expect(runNavidromeImport(convertRequest(), d)).rejects.toThrow(/no ffmpeg/);
+      expect(d.download).not.toHaveBeenCalled();
+    });
+
+    it('converts nothing unless asked', async () => {
+      const convertToAiff = converter();
+      const d = { ...mixed(), convertToAiff };
+      await runNavidromeImport({ ...convertRequest(), convertToAiff: false }, d);
+      expect(convertToAiff).not.toHaveBeenCalled();
+      expect(d.writeDb.mock.calls[0][0].map((t: any) => path.extname(t.location))).toEqual(['.flac', '.wav', '.m4a', '.mp3', '.aiff']);
+    });
   });
 
   it('reports progress as it goes', async () => {

@@ -17,7 +17,7 @@ const EMPTY: CleanupSnapshot = {
 };
 
 /**
- * The FLAC cleanup, outside its panel for the reason `convertFlacSession`
+ * The FLAC cleanup, outside its panel for the reason `convertAudioSession`
  * gives: decoding every pair takes minutes, and switching tabs meanwhile
  * unmounted the panel and lost the run's progress and result.
  */
@@ -69,6 +69,6 @@ export async function startCleanup(
 export async function cancelCleanup(): Promise<void> {
   // The main process keeps one table of runs in flight for conversions and cleanups.
   if (state.operationId && state.running) {
-    await window.electronAPI.cancelConvertFlac(state.operationId);
+    await window.electronAPI.cancelConvertAudio(state.operationId);
   }
 }

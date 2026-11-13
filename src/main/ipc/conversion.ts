@@ -1,8 +1,10 @@
 import * as fs from 'fs';
-import { app, ipcMain, shell } from 'electron';
+import { ipcMain, shell } from 'electron';
 import { runtime, safeConsole } from '../runtime';
-import { resolveFfmpegPath } from '../ffmpegBinary';
-import { FlacConverter, planConversions, isFlacLocation, type ConversionFormat } from '../flacConverter';
+import { appFfmpegPath } from '../appFfmpeg';
+import {
+  AudioConverter, planConversions, isConvertible, sourceKind, SOURCE_KINDS, type ConversionFormat, type SourceKind,
+} from '../audioConverter';
 import { writeConversionsToDb } from '../rekordboxDbConverter';
 import { writePlansFor, settleConversions, applyConversionsToLibrary, locationsStillUsed } from '../conversionSettlement';
 import { backupDatabaseFile } from '../backupDatabase';
@@ -12,20 +14,14 @@ import { hostEnvironment, toHostPath } from '../hostPath';
 import { planFlacCleanup, cleanupFlacs } from '../flacCleanup';
 import { parseDb } from '../rekordboxDbParser';
 import type {
-  TrackPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacSummary, IpcResult,
+  TrackPayload, ConvertAudioPreview, ConvertAudioRequest, ConvertAudioSummary, IpcResult,
   FlacCleanupPreview, FlacCleanupRequest, FlacCleanupSummary,
 } from '../ipcContract';
 
 /** Runs in flight — conversions and cleanups — so a cancel request can reach the one it names. */
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
-const ffmpegPath = () => resolveFfmpegPath({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  appPath: app.getAppPath(),
-  platform: process.platform,
-  arch: process.arch,
-});
+const ffmpegPath = appFfmpegPath;
 
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
 
@@ -69,7 +65,7 @@ const removeQuietly = (files: string[]) => {
 };
 
 /**
- * Converting FLAC to AIFF or WAV, and pointing the library at the result.
+ * Converting FLAC, WAV and M4A to AIFF, WAV or MP3, and pointing the library at the result.
  *
  * The order is what keeps it safe: convert and verify every file first, then
  * write the library once, and only then touch an original — and only when
@@ -78,20 +74,25 @@ const removeQuietly = (files: string[]) => {
  * touched.
  */
 export function registerConversionIpc(): void {
-  ipcMain.handle('convert-flac-preview', async (_e, { tracks: all, format, scopeTrackIds }: {
-    tracks: TrackPayload[]; format: ConversionFormat; scopeTrackIds?: string[];
-  }): Promise<IpcResult<ConvertFlacPreview>> => {
+  ipcMain.handle('convert-audio-preview', async (_e, { tracks: all, format, scopeTrackIds, sources }: {
+    tracks: TrackPayload[]; format: ConversionFormat; scopeTrackIds?: string[]; sources?: SourceKind[];
+  }): Promise<IpcResult<ConvertAudioPreview>> => {
     try {
       const tracks = inScope(all, scopeTrackIds);
       const { hostTracks } = onThisDisk(tracks);
-      const plan = planConversions(hostTracks, format);
-      const flac = tracks.filter((t) => isFlacLocation(t.location));
+      const plan = planConversions(hostTracks, format, undefined, sources);
+      const filesByKind = Object.fromEntries(SOURCE_KINDS.map((k) => [k, 0])) as Record<SourceKind, number>;
+      for (const job of plan.jobs) {
+        const kind = sourceKind(job.source);
+        if (kind) { filesByKind[kind]++; }
+      }
       return {
         success: true,
         data: {
           available: ffmpegPath() !== null,
-          flacTracks: flac.length,
+          sourceTracks: tracks.filter((t) => isConvertible(t.location, format, sources)).length,
           files: plan.jobs.length,
+          filesByKind,
           reusable: plan.jobs.filter((job) => job.existing).length,
           missing: plan.skipped.filter((s) => s.kind === 'missing').length,
           conflicts: plan.skipped.filter((s) => s.kind === 'exists').length,
@@ -103,8 +104,8 @@ export function registerConversionIpc(): void {
     }
   });
 
-  ipcMain.handle('convert-flac', async (event, request: ConvertFlacRequest): Promise<IpcResult<ConvertFlacSummary>> => {
-    const { operationId, tracks: allTracks, scopeTrackIds, libraryPath, dbKey, format, trashOriginals, workers } = request;
+  ipcMain.handle('convert-audio', async (event, request: ConvertAudioRequest): Promise<IpcResult<ConvertAudioSummary>> => {
+    const { operationId, tracks: allTracks, scopeTrackIds, libraryPath, dbKey, format, sources, trashOriginals, workers } = request;
     const tracks = inScope(allTracks, scopeTrackIds);
     const ffmpeg = ffmpegPath();
     if (!ffmpeg) {
@@ -131,11 +132,11 @@ export function registerConversionIpc(): void {
     cancelTokens.set(operationId, cancelToken);
     try {
       const disk = onThisDisk(tracks);
-      const plan = planConversions(disk.hostTracks, format);
-      const result = await new FlacConverter(ffmpeg).convert(
+      const plan = planConversions(disk.hostTracks, format, undefined, sources);
+      const result = await new AudioConverter(ffmpeg).convert(
         plan,
         format,
-        (progress) => { event.sender.send('convert-flac-progress', { operationId, ...progress }); },
+        (progress) => { event.sender.send('convert-audio-progress', { operationId, ...progress }); },
         cancelToken,
         workers
       );
@@ -155,7 +156,7 @@ export function registerConversionIpc(): void {
           success: false,
           error: 'rekordbox was opened while converting, so nothing was written into its database. '
             + `The ${result.converted.length} finished files are kept: close rekordbox and convert again, `
-            + 'and each is checked against its FLAC and reused.',
+            + 'and each is checked against its original and reused.',
         };
       }
 
@@ -185,7 +186,7 @@ export function registerConversionIpc(): void {
           const message = error instanceof Error ? error.message : 'The library could not be written';
           return {
             success: false,
-            error: `${message} The files converted by this run were removed again; the FLAC originals were not touched.`,
+            error: `${message} The files converted by this run were removed again; the originals were not touched.`,
           };
         }
       }
@@ -198,7 +199,7 @@ export function registerConversionIpc(): void {
       const trashFailed: Array<{ file: string; error: string }> = [];
       // Only a database write moves rekordbox's own entries. An XML library is a
       // file rekordbox does not read by itself: its master.db still points at
-      // every FLAC, so trashing them would leave the real collection missing.
+      // every original, so trashing them would leave the real collection missing.
       if (trashOriginals && isDatabase) {
         for (const original of settlement.trashable) {
           try {
@@ -234,7 +235,7 @@ export function registerConversionIpc(): void {
     }
   });
 
-  ipcMain.handle('cancel-convert-flac', async (_e, operationId: string) => {
+  ipcMain.handle('cancel-convert-audio', async (_e, operationId: string) => {
     const token = cancelTokens.get(operationId);
     if (token) { token.cancelled = true; }
     return { success: true };
@@ -284,7 +285,7 @@ function registerFlacCleanupIpc(): void {
     cancelTokens.set(operationId, cancelToken);
     try {
       const disk = onThisDisk(tracks);
-      const converter = new FlacConverter(ffmpeg);
+      const converter = new AudioConverter(ffmpeg);
       const outcome = await cleanupFlacs(
         planFlacCleanup(disk.hostTracks),
         {

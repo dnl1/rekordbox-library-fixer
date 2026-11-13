@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Download, FolderOpen, ListMusic, Search, Server, X } from 'lucide-react';
+import { CheckCircle, Download, FolderOpen, ListMusic, Search, Server, Target, X } from 'lucide-react';
 import { useAppContext } from '../../AppWithRouter';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePendingHotCues, usePendingHotCuesStore } from '../../stores/pendingHotCuesStore';
+import { applyPendingHotCues, describePendingOutcome } from '../../hotcues/pendingHotCues';
 import { PageHeader } from '../ui';
+import { NavidromeImportModal, type NavidromeImportOptions } from '../navidrome/NavidromeImportModal';
 import { fileTypeFor } from '../../../main/navidrome/fileTypes';
 import type {
   NavidromeConnectionInfo, NavidromeImportProgress, NavidromeImportSummary, NavidromePlaylist, NavidromeSong,
@@ -26,6 +29,7 @@ const hostOf = (url: string) => { try { return new URL(url).host; } catch { retu
 const PHASE_TEXT: Record<NavidromeImportProgress['phase'], string> = {
   listing: 'Asking the server what to fetch…',
   downloading: 'Downloading',
+  converting: 'Converting to AIFF',
   writing: "Writing into rekordbox's database…",
 };
 
@@ -34,6 +38,10 @@ const PHASE_TEXT: Record<NavidromeImportProgress['phase'], string> = {
  * playlists or search for songs, and the original files are downloaded and
  * added to rekordbox's own database — playlists as playlists, in order.
  * rekordbox analyses them itself the first time it sees them.
+ *
+ * "Import into rekordbox" asks first whether the FLAC, WAV and M4A files
+ * become AIFF on the way, and whether the tracks get hot cues — queued until
+ * rekordbox has analysed them, since the cues are placed on its analysis.
  */
 export const NavidromePage: React.FC = () => {
   const { libraryPath, showNotification, onLoadLibrary, onOpenSettings } = useAppContext();
@@ -58,6 +66,10 @@ export const NavidromePage: React.FC = () => {
   const [progress, setProgress] = useState<NavidromeImportProgress | null>(null);
   const [summary, setSummary] = useState<NavidromeImportSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [queuedHotCues, setQueuedHotCues] = useState(0);
+  const [cueing, setCueing] = useState(false);
+  const pendingHotCues = usePendingHotCues(libraryPath);
   const operationRef = useRef('');
 
   useEffect(() => {
@@ -120,7 +132,8 @@ export const NavidromePage: React.FC = () => {
     if (folder) { setDestination(folder); }
   };
 
-  const runImport = async () => {
+  const runImport = async (options: NavidromeImportOptions) => {
+    setAsking(false);
     const { running: rekordboxOpen } = await window.electronAPI.isRekordboxRunning();
     if (rekordboxOpen) {
       showNotification('error', 'Close rekordbox first — the tracks are written into its database.');
@@ -128,23 +141,54 @@ export const NavidromePage: React.FC = () => {
     }
     const operationId = `navidrome-${Date.now()}`;
     operationRef.current = operationId;
-    setRunning(true); setSummary(null); setError(null); setProgress(null);
+    setRunning(true); setSummary(null); setError(null); setProgress(null); setQueuedHotCues(0);
+    const { rekordboxDbKey, workers } = useSettingsStore.getState();
     const res = await window.electronAPI.navidromeImport({
       operationId,
       libraryPath,
-      dbKey: useSettingsStore.getState().rekordboxDbKey,
+      dbKey: rekordboxDbKey,
       destination: target,
       playlistIds: [...pickedPlaylists],
       songIds: [...pickedSongs.keys()],
+      convertToAiff: options.convertToAiff,
+      workers,
     });
     setRunning(false); setProgress(null);
     if (!res.success || !res.data) { setError(res.error ?? 'The import failed.'); return; }
     const s = res.data;
     setSummary(s);
+    // Queued, not tried: the tracks were written seconds ago, and rekordbox
+    // has not analysed them — the analysis is what the cues are placed on.
+    if (options.autoHotCues && !s.cancelled && s.trackIds.length > 0) {
+      usePendingHotCuesStore.getState().add(libraryPath, s.trackIds);
+      setQueuedHotCues(s.trackIds.length);
+    }
     if (!s.cancelled && (s.tracksAdded > 0 || s.playlists.length > 0)) {
       setPickedPlaylists(new Set()); setPickedSongs(new Map());
       showNotification('success', `Imported ${plural(s.tracksAdded, 'track')}${s.playlists.length ? ` and ${plural(s.playlists.length, 'playlist')}` : ''} into rekordbox.`, { important: true });
     }
+  };
+
+  const addHotCuesNow = async () => {
+    setCueing(true);
+    const res = await applyPendingHotCues(libraryPath);
+    setCueing(false);
+    if (!res.success || !res.data) {
+      showNotification('error', res.error ?? 'The hot cues could not be added', { important: true });
+      return;
+    }
+    const outcome = res.data;
+    if (outcome.rekordboxOpen) {
+      showNotification('error', 'Close rekordbox first — the hot cues are written into its database.');
+      return;
+    }
+    const message = describePendingOutcome(outcome);
+    if (!message) {
+      showNotification('info', `None of the ${plural(outcome.waiting, 'track')} has been analysed by rekordbox yet — analyse them there, close it, and try again.`);
+      return;
+    }
+    showNotification('success', message, { important: true });
+    onLoadLibrary?.(libraryPath);
   };
 
   const cancel = async () => { await window.electronAPI.cancelNavidromeImport(operationRef.current); };
@@ -257,13 +301,30 @@ export const NavidromePage: React.FC = () => {
           <button onClick={pickFolder} aria-label="Browse" className="btn-ghost text-xs" disabled={running}><FolderOpen size={12} /></button>
         </div>
 
+        {pendingHotCues.length > 0 && !running && isDatabase && (
+          <div className="flex items-center gap-3 text-xs font-te-mono text-te-grey-600">
+            <Target size={12} className="text-te-orange flex-shrink-0" />
+            <p className="flex-1">
+              {plural(pendingHotCues.length, 'imported track')} wait{pendingHotCues.length === 1 ? 's' : ''} for hot cues.
+              rekordbox analyses a track when it first loads it — or select them there and Analyze Track. Then close
+              rekordbox: the cues are added when this app next opens the library, or now.
+            </p>
+            <button onClick={addHotCuesNow} disabled={cueing} className="btn-secondary text-xs disabled:opacity-40">
+              {cueing ? 'Adding…' : 'Add hot cues now'}
+            </button>
+            <button onClick={() => usePendingHotCuesStore.getState().forget(libraryPath)} disabled={cueing} className="btn-ghost text-xs">
+              Forget
+            </button>
+          </div>
+        )}
+
         {running && progress && (
           <div className="space-y-1">
             <p className="text-xs font-te-mono text-te-grey-600">
-              {PHASE_TEXT[progress.phase]}{progress.phase === 'downloading' ? ` ${progress.current} of ${progress.total}` : ''}
+              {PHASE_TEXT[progress.phase]}{progress.phase === 'downloading' || progress.phase === 'converting' ? ` ${progress.current} of ${progress.total}` : ''}
               {progress.currentFile ? ` — ${progress.currentFile}` : ''}
             </p>
-            {progress.phase === 'downloading' && progress.total > 0 && (
+            {(progress.phase === 'downloading' || progress.phase === 'converting') && progress.total > 0 && (
               <div className="w-full bg-te-grey-200 rounded-full h-1.5">
                 <div className="bg-te-orange h-1.5 rounded-full transition-all" style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }} />
               </div>
@@ -282,7 +343,9 @@ export const NavidromePage: React.FC = () => {
                 : `${plural(summary.tracksAdded, 'track')} added${summary.tracksAlreadyThere ? `, ${summary.tracksAlreadyThere} already in the collection` : ''}`
                   + `${summary.playlists.length ? `; playlists: ${summary.playlists.map((p) => `${p.name} (${p.tracks})`).join(', ')}` : ''}.`}
             </p>
-            {!summary.cancelled && <p className="text-te-grey-500">{plural(summary.downloaded, 'file')} downloaded, {summary.reused} already there. rekordbox analyses the new tracks the first time it opens them.</p>}
+            {!summary.cancelled && <p className="text-te-grey-500">{plural(summary.downloaded, 'file')} downloaded, {summary.reused} already there{summary.convertedToAiff > 0 ? `, ${summary.convertedToAiff} imported as AIFF` : ''}. rekordbox analyses the new tracks the first time it opens them.</p>}
+            {queuedHotCues > 0 && <p className="text-te-grey-500">Hot cues for {plural(queuedHotCues, 'track')} are queued until rekordbox has analysed them.</p>}
+            {summary.notConverted.length > 0 && <details><summary className="cursor-pointer text-te-amber-600">{plural(summary.notConverted.length, 'song')} imported as {summary.notConverted.length === 1 ? 'it was' : 'they were'}, not as AIFF</summary><ul>{summary.notConverted.map((s, i) => <li key={i}>{s.title} — {s.reason}</li>)}</ul></details>}
             {summary.playlistFileProblem && <p className="text-te-amber-600">The playlists were written, but rekordbox&apos;s playlist file could not be updated ({summary.playlistFileProblem}) — rekordbox may not show them.</p>}
             {summary.skipped.length > 0 && <details><summary className="cursor-pointer">{plural(summary.skipped.length, 'song')} left out</summary><ul>{summary.skipped.map((s, i) => <li key={i}>{s.title} — {s.reason}</li>)}</ul></details>}
             {summary.failed.length > 0 && <details open><summary className="cursor-pointer text-te-red-500">{plural(summary.failed.length, 'download')} failed</summary><ul>{summary.failed.map((f, i) => <li key={i}>{f.title} — {f.error}</li>)}</ul></details>}
@@ -301,12 +364,21 @@ export const NavidromePage: React.FC = () => {
           {running ? (
             <button onClick={cancel} className="btn-secondary text-xs flex items-center gap-1"><X size={12} /> Cancel</button>
           ) : (
-            <button onClick={runImport} disabled={nothingPicked || Boolean(blocked)} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-40">
+            <button onClick={() => setAsking(true)} disabled={nothingPicked || Boolean(blocked)} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-40">
               <Download size={12} /> Import into rekordbox
             </button>
           )}
         </div>
       </div>
+
+      {asking && (
+        <NavidromeImportModal
+          trackCount={pickedSongCount}
+          destination={target}
+          onConfirm={(options) => { void runImport(options); }}
+          onCancel={() => setAsking(false)}
+        />
+      )}
     </div>
   );
 };

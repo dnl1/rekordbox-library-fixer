@@ -68,6 +68,8 @@ export interface ImportOutcome {
   tracksAdded: number;
   /** Already in the collection at the same location: used as they are. */
   tracksAlreadyThere: number;
+  /** `djmdContent.ID` of every imported track, added or already there, in import order. */
+  contentIds: string[];
   playlists: CreatedPlaylist[];
 }
 
@@ -161,14 +163,15 @@ export function applyImport(
   const saveCounter = db.prepare("UPDATE agentRegistry SET int_1 = ? WHERE registry_id = 'localUpdateCount'");
 
   const run = db.transaction((): ImportOutcome => {
-    const outcome: ImportOutcome = { tracksAdded: 0, tracksAlreadyThere: 0, playlists: [] };
+    const outcome: ImportOutcome = { tracksAdded: 0, tracksAlreadyThere: 0, contentIds: [], playlists: [] };
     const contentByLocation = new Map<string, string>();
 
     for (const track of tracks) {
       if (contentByLocation.has(track.location)) { continue; }
       const existing = (findContent.get(track.location) as { ID: string } | undefined)?.ID;
       if (existing) {
-        contentByLocation.set(track.location, existing);
+        contentByLocation.set(track.location, String(existing));
+        outcome.contentIds.push(String(existing));
         outcome.tracksAlreadyThere++;
         continue;
       }
@@ -184,6 +187,7 @@ export function applyImport(
         crypto.randomUUID(), nextUsn(), stamp, stamp,
       );
       contentByLocation.set(track.location, id);
+      outcome.contentIds.push(id);
       outcome.tracksAdded++;
     }
 

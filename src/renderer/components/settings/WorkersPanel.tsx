@@ -20,7 +20,7 @@ export const WorkersPanel: React.FC = () => {
         <Cpu className="w-4 h-4" /> Workers
       </h3>
       <p className="text-sm text-te-grey-500 font-te-mono mb-te-md">
-        How many files are worked on at once by Convert FLAC, Clean up converted FLACs and Auto hot cues.
+        How many files are worked on at once by Convert audio, Clean up converted FLACs and Auto hot cues.
         More is faster on a big library, and leaves less of the computer for anything else meanwhile.
       </p>
       <label htmlFor="maintenance-workers" className="block text-xs font-medium text-te-grey-600 mb-1 uppercase">

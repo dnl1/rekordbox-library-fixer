@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 vi.unmock('fs');
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  FlacConverter, planConversions, convertedPath, outputShape, mp3SampleRate, ffmpegArgs,
-  toPlainPcmWavHeader, verifyConversion, probeAudio,
-} from '../../src/main/flacConverter';
+  AudioConverter, planConversions, convertedPath, outputShape, mp3SampleRate, ffmpegArgs,
+  toPlainPcmWavHeader, verifyConversion, probeAudio, sourceKind, isConvertible,
+} from '../../src/main/audioConverter';
 import { resolveFfmpegPath } from '../../src/main/ffmpegBinary';
 
 describe('convertedPath', () => {
@@ -17,9 +17,35 @@ describe('convertedPath', () => {
     expect(convertedPath('/music/A/Track.FLAC', 'mp3')).toBe('/music/A/Track.mp3');
   });
 
+  it('does the same for a WAV or an M4A', () => {
+    expect(convertedPath('/music/A/Track.wav', 'aiff')).toBe('/music/A/Track.aiff');
+    expect(convertedPath('/music/A/Track.M4A', 'wav')).toBe('/music/A/Track.wav');
+  });
+
   it('keeps the path spelled the way rekordbox stored it', () => {
     // rekordbox on Windows writes forward slashes; rebuilding the path would not.
     expect(convertedPath('C:/Users/dj/Songs/01 - A.b (edit).flac', 'aiff')).toBe('C:/Users/dj/Songs/01 - A.b (edit).aiff');
+  });
+});
+
+describe('sourceKind and isConvertible', () => {
+  it('reads FLAC, WAV and M4A, whatever the case of the extension', () => {
+    expect(sourceKind('/m/a.FLAC')).toBe('flac');
+    expect(sourceKind('/m/a.wav')).toBe('wav');
+    expect(sourceKind('/m/a.m4a')).toBe('m4a');
+    expect(sourceKind('/m/a.mp3')).toBeNull();
+    expect(sourceKind('/m/a.aiff')).toBeNull();
+  });
+
+  it('never converts a file to the format it already is', () => {
+    expect(isConvertible('/m/a.wav', 'aiff')).toBe(true);
+    expect(isConvertible('/m/a.wav', 'wav')).toBe(false);
+    expect(isConvertible('/m/a.m4a', 'mp3')).toBe(true);
+  });
+
+  it('converts only the kinds asked for', () => {
+    expect(isConvertible('/m/a.m4a', 'aiff', ['flac'])).toBe(false);
+    expect(isConvertible('/m/a.flac', 'aiff', ['flac'])).toBe(true);
   });
 });
 
@@ -39,14 +65,51 @@ describe('planConversions', () => {
     expect(plan.jobs[0].trackIds).toEqual(['1', '2']);
   });
 
-  it('ignores what is not FLAC, and streaming tracks', () => {
+  it('ignores MP3, AIFF and streaming tracks', () => {
     const plan = planConversions([
       { id: '1', location: '/m/a.mp3' },
       { id: '2', location: 'tidal:tracks:123' },
       { id: '3', location: '' },
+      { id: '4', location: '/m/b.aiff' },
     ], 'aiff', all);
     expect(plan.jobs).toEqual([]);
     expect(plan.skipped).toEqual([]);
+  });
+
+  it('converts FLAC, WAV and M4A alike', () => {
+    const plan = planConversions([
+      { id: '1', location: '/m/a.flac' },
+      { id: '2', location: '/m/b.wav' },
+      { id: '3', location: '/m/c.m4a' },
+    ], 'aiff', (p) => !p.endsWith('.aiff'));
+    expect(plan.jobs.map((j) => j.destination)).toEqual(['/m/a.aiff', '/m/b.aiff', '/m/c.aiff']);
+  });
+
+  it('leaves a WAV alone when converting to WAV', () => {
+    const plan = planConversions([{ id: '1', location: '/m/a.wav' }, { id: '2', location: '/m/b.flac' }], 'wav', (p) => p !== '/m/b.wav');
+    expect(plan.jobs.map((j) => j.source)).toEqual(['/m/b.flac']);
+    expect(plan.skipped).toEqual([]);
+  });
+
+  it('converts only the kinds asked for', () => {
+    const plan = planConversions([{ id: '1', location: '/m/a.m4a' }, { id: '2', location: '/m/b.flac' }], 'aiff', (p) => !p.endsWith('.aiff'), ['flac']);
+    expect(plan.jobs.map((j) => j.source)).toEqual(['/m/b.flac']);
+  });
+
+  it('converts one of two files that would land on one name, and says so for the other', () => {
+    // Track.flac and Track.wav would both become Track.aiff: two workers
+    // writing one file at once is how a conversion gets corrupted.
+    const plan = planConversions([
+      { id: '1', location: '/m/Track.flac' },
+      { id: '2', location: '/m/Track.wav' },
+      { id: '3', location: '/m/Track.wav' },
+    ], 'aiff', (p) => !p.endsWith('.aiff'));
+    expect(plan.jobs).toHaveLength(1);
+    expect(plan.jobs[0].source).toBe('/m/Track.flac');
+    expect(plan.skipped).toEqual([
+      expect.objectContaining({ trackId: '2', kind: 'exists', reason: expect.stringMatching(/Track\.flac becomes Track\.aiff too/) }),
+      expect.objectContaining({ trackId: '3', kind: 'exists' }),
+    ]);
   });
 
   it('reports a FLAC whose file is gone', () => {
@@ -158,7 +221,7 @@ describe('toPlainPcmWavHeader', () => {
 });
 
 describe('verifyConversion', () => {
-  const source = { sampleRate: 44100, bitsPerSample: 16, channels: 2, samples: 441000 };
+  const source = { sampleRate: 44100, bitsPerSample: 16, channels: 2, samples: 441000, lossless: true };
   const pcm = outputShape('aiff', source);
   const mp3 = outputShape('mp3', source);
 
@@ -178,6 +241,13 @@ describe('verifyConversion', () => {
     expect(verifyConversion(source, { ...source, samples: 441000 + 1105 + 1152 }, mp3, 'mp3')).toBeNull();
     expect(verifyConversion(source, { ...source, samples: 220500 }, mp3, 'mp3')).toMatch(/length/);
   });
+
+  it('holds AAC decoded to AIFF to a tolerance, since its length is only estimated', () => {
+    const aac = { ...source, lossless: false };
+    expect(verifyConversion(aac, { ...source, samples: 441000 - 213 }, pcm, 'aiff')).toBeNull();
+    expect(verifyConversion(aac, { ...source, samples: 220500 }, pcm, 'aiff')).toMatch(/length/);
+    expect(verifyConversion(aac, { ...source, bitsPerSample: 24 }, pcm, 'aiff')).toMatch(/bit depth/);
+  });
 });
 
 // ─── The real thing, with the bundled ffmpeg ─────────────────────────────────
@@ -190,7 +260,7 @@ const ffmpeg = resolveFfmpegPath({
   arch: process.arch,
 });
 
-describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
+describe.skipIf(!ffmpeg)('AudioConverter with the bundled ffmpeg', () => {
   let dir: string;
   let flac: string;
 
@@ -211,7 +281,7 @@ describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
 
   const convert = async (format: 'aiff' | 'wav' | 'mp3') => {
     const plan = planConversions([{ id: 't1', location: flac }], format);
-    return new FlacConverter(ffmpeg!).convert(plan, format, () => {}, { cancelled: false });
+    return new AudioConverter(ffmpeg!).convert(plan, format, () => {}, { cancelled: false });
   };
 
   it('writes a sample-exact 24-bit AIFF and leaves the FLAC alone', async () => {
@@ -259,7 +329,7 @@ describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
     execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-i', other, '-c:a', 'pcm_s24be', path.join(dir, 'Impostor.aiff')]);
     fs.copyFileSync(flac, path.join(dir, 'Impostor.flac'));
     const plan = planConversions([{ id: 'x', location: path.join(dir, 'Impostor.flac') }], 'aiff');
-    const result = await new FlacConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: false });
+    const result = await new AudioConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: false });
     expect(result.converted).toEqual([]);
     expect(result.skipped[0].reason).toMatch(/not this recording \(the audio differs\)/);
   });
@@ -268,17 +338,59 @@ describe.skipIf(!ffmpeg)('FlacConverter with the bundled ffmpeg', () => {
     const copies = ['One', 'Two', 'Three'].map((n) => { const f = path.join(dir, `${n}.flac`); fs.copyFileSync(flac, f); return f; });
     const plan = planConversions(copies.map((location, i) => ({ id: `p${i}`, location })), 'wav');
     const active: number[] = [];
-    const result = await new FlacConverter(ffmpeg!).convert(plan, 'wav', (p) => active.push(p.active), { cancelled: false }, 3);
+    const result = await new AudioConverter(ffmpeg!).convert(plan, 'wav', (p) => active.push(p.active), { cancelled: false }, 3);
     expect(result.failed).toEqual([]);
     expect(result.converted).toHaveLength(3);
     expect(Math.max(...active)).toBe(3);
     expect(active[active.length - 1]).toBe(0);
   });
 
+  it('converts a 24-bit WAV to a sample-exact AIFF', async () => {
+    const wav = path.join(dir, 'Wave.wav');
+    execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-i', flac, '-c:a', 'pcm_s24le', wav]);
+    const plan = planConversions([{ id: 'w', location: wav }], 'aiff');
+    const result = await new AudioConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: false });
+    expect(result.failed).toEqual([]);
+    expect(result.converted[0]).toMatchObject({ newLocation: path.join(dir, 'Wave.aiff'), bitDepth: 24, sampleRate: 96000 });
+    const [src, out] = await Promise.all([probeAudio(wav), probeAudio(result.converted[0].newLocation)]);
+    expect(out.samples).toBe(src.samples);
+  });
+
+  it('converts an ALAC M4A sample-exact, keeping its artwork', async () => {
+    const m4a = path.join(dir, 'Apple Lossless.m4a');
+    execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-i', flac, '-map', '0:a', '-map', '0:v',
+      '-c:a', 'alac', '-c:v', 'copy', '-disposition:v', 'attached_pic', m4a]);
+    const plan = planConversions([{ id: 'l', location: m4a }], 'aiff');
+    const result = await new AudioConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: false });
+    expect(result.failed).toEqual([]);
+    expect(result.converted[0]).toMatchObject({ bitDepth: 24, sampleRate: 96000 });
+    // music-metadata reads a 96 kHz ALAC's rate as 0 — the MP4 field is 16 bits — so ffmpeg is asked.
+    const src = await new AudioConverter(ffmpeg!).probeSource(m4a);
+    const out = await probeAudio(result.converted[0].newLocation);
+    expect(src).toMatchObject({ sampleRate: 96000, lossless: true });
+    expect(out.samples).toBe(src.samples);
+    const info = spawnSync(ffmpeg!, ['-hide_banner', '-i', result.converted[0].newLocation], { encoding: 'utf8' }).stderr;
+    expect(info).toMatch(/Video: mjpeg/);
+  });
+
+  it('converts an AAC M4A to a 16-bit AIFF, and recognises it on the next run', async () => {
+    const m4a = path.join(dir, 'Shop Bought.m4a');
+    execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', '-i', flac, '-map', '0:a', '-ar', '44100',
+      '-c:a', 'aac', '-b:a', '256k', m4a]);
+    const first = await new AudioConverter(ffmpeg!).convert(planConversions([{ id: 'a', location: m4a }], 'aiff'), 'aiff', () => {}, { cancelled: false });
+    expect(first.failed).toEqual([]);
+    expect(first.converted[0]).toMatchObject({ bitDepth: 16, sampleRate: 44100 });
+
+    // Hashed at 16 bits, as written: AAC decodes to floating point, and a
+    // widened hash of it never matches the AIFF it was rounded into.
+    const again = await new AudioConverter(ffmpeg!).convert(planConversions([{ id: 'a', location: m4a }], 'aiff'), 'aiff', () => {}, { cancelled: false });
+    expect(again.converted[0]).toMatchObject({ adopted: true });
+  });
+
   it('stops without leaving a partial file when cancelled', async () => {
     const plan = planConversions([{ id: 't1', location: flac }], 'aiff', (p) => p === flac);
     plan.jobs[0].destination = path.join(dir, 'cancelled.aiff');
-    const result = await new FlacConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: true });
+    const result = await new AudioConverter(ffmpeg!).convert(plan, 'aiff', () => {}, { cancelled: true });
     expect(result.cancelled).toBe(true);
     expect(fs.existsSync(path.join(dir, 'cancelled.aiff'))).toBe(false);
   });

@@ -12,14 +12,27 @@ vi.mock('../../src/renderer/AppWithRouter', () => ({ useAppContext: () => contex
 
 import { NavidromePage, formatDuration } from '../../src/renderer/components/pages/NavidromePage';
 import { useSettingsStore } from '../../src/renderer/stores/settingsStore';
+import { usePendingHotCuesStore } from '../../src/renderer/stores/pendingHotCuesStore';
 
 const api = () => (window as any).electronAPI;
-const summary = { downloaded: 3, reused: 0, skipped: [], failed: [], tracksAdded: 3, tracksAlreadyThere: 0, playlists: [{ name: 'Peak', tracks: 3 }], playlistFileUpdated: true, cancelled: false, backupPath: '/b' };
+const summary = {
+  downloaded: 3, reused: 0, skipped: [], failed: [], tracksAdded: 3, tracksAlreadyThere: 0, trackIds: ['11', '12', '13'],
+  convertedToAiff: 2, notConverted: [], playlists: [{ name: 'Peak', tracks: 3 }], playlistFileUpdated: true, cancelled: false, backupPath: '/b',
+};
+
+/** "Import into rekordbox", then the dialog's own Import. */
+const importWith = async (dialog?: (d: HTMLElement) => void) => {
+  fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+  const d = await screen.findByRole('dialog', { name: 'Import into rekordbox' });
+  dialog?.(d);
+  fireEvent.click(screen.getByRole('button', { name: /^Import$/ }));
+};
 
 beforeEach(() => {
   context.libraryPath = '/pioneer/master.db';
   Object.values(context).forEach((v) => typeof v === 'function' && (v as any).mockReset?.());
-  useSettingsStore.setState({ navidromeDestination: '', rekordboxDbKey: 'the-key' });
+  useSettingsStore.setState({ navidromeDestination: '', rekordboxDbKey: 'the-key', navidromeConvertToAiff: true, navidromeAutoHotCues: true, workers: 4 });
+  usePendingHotCuesStore.setState({ byLibrary: {} });
   api().navidromeConnection = vi.fn(async () => ({ success: true, data: { url: 'https://music.example.com', username: 'dj', hasPassword: true } }));
   api().navidromeDefaultDestination = vi.fn(async () => ({ success: true, data: '/Users/dj/Music/Navidrome' }));
   api().navidromePlaylists = vi.fn(async () => ({ success: true, data: [
@@ -69,9 +82,10 @@ describe('NavidromePage', () => {
     await waitFor(() => expect((screen.getByLabelText('Download to') as HTMLInputElement).value).toBe('/Users/dj/Music/Navidrome'));
     expect(screen.getByText(/1 playlist and 1 song picked — about 4 tracks/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+    await importWith();
     await waitFor(() => expect(api().navidromeImport).toHaveBeenCalledWith(expect.objectContaining({
       libraryPath: '/pioneer/master.db', dbKey: 'the-key', destination: '/Users/dj/Music/Navidrome', playlistIds: ['p1'], songIds: ['s1'],
+      convertToAiff: true, workers: 4,
     })));
     expect(await screen.findByText(/3 tracks added; playlists: Peak \(3\)/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Load the updated library' }));
@@ -99,7 +113,7 @@ describe('NavidromePage', () => {
     api().isRekordboxRunning = vi.fn(async () => ({ running: true }));
     render(<NavidromePage />);
     fireEvent.click(await screen.findByLabelText('Peak'));
-    fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+    await importWith();
     await waitFor(() => expect(context.showNotification).toHaveBeenCalledWith('error', expect.stringMatching(/Close rekordbox first/)));
     expect(api().navidromeImport).not.toHaveBeenCalled();
   });
@@ -108,7 +122,66 @@ describe('NavidromePage', () => {
     api().navidromeImport = vi.fn(async () => ({ success: true, data: { ...summary, cancelled: true, tracksAdded: 0, playlists: [] } }));
     render(<NavidromePage />);
     fireEvent.click(await screen.findByLabelText('Peak'));
-    fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+    await importWith();
     expect(await screen.findByText(/Cancelled — nothing was added to rekordbox/)).toBeTruthy();
+    expect(usePendingHotCuesStore.getState().byLibrary).toEqual({});
+  });
+
+  it('asks whether to convert to AIFF and add hot cues, ticked as last time', async () => {
+    useSettingsStore.setState({ navidromeConvertToAiff: false, navidromeAutoHotCues: true });
+    render(<NavidromePage />);
+    fireEvent.click(await screen.findByLabelText('Peak'));
+    fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+    await screen.findByRole('dialog', { name: 'Import into rekordbox' });
+    expect((screen.getByLabelText(/Convert to AIFF/) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/Add hot cues/) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText(/FLAC, WAV and M4A become AIFF/)).toBeTruthy();
+    expect(api().navidromeImport).not.toHaveBeenCalled();
+  });
+
+  it('imports as chosen in the dialog, and remembers the choice', async () => {
+    render(<NavidromePage />);
+    fireEvent.click(await screen.findByLabelText('Peak'));
+    await importWith(() => {
+      fireEvent.click(screen.getByLabelText(/Convert to AIFF/));
+      fireEvent.click(screen.getByLabelText(/Add hot cues/));
+    });
+    await waitFor(() => expect(api().navidromeImport).toHaveBeenCalledWith(expect.objectContaining({ convertToAiff: false })));
+    expect(useSettingsStore.getState()).toMatchObject({ navidromeConvertToAiff: false, navidromeAutoHotCues: false });
+    await screen.findByText(/3 tracks added/);
+    expect(usePendingHotCuesStore.getState().byLibrary).toEqual({});
+  });
+
+  it('imports nothing when the dialog is cancelled', async () => {
+    render(<NavidromePage />);
+    fireEvent.click(await screen.findByLabelText('Peak'));
+    fireEvent.click(screen.getByRole('button', { name: /Import into rekordbox/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api().navidromeImport).not.toHaveBeenCalled();
+  });
+
+  it('queues hot cues for the imported tracks until rekordbox has analysed them', async () => {
+    render(<NavidromePage />);
+    fireEvent.click(await screen.findByLabelText('Peak'));
+    await importWith();
+    expect(await screen.findByText(/Hot cues for 3 tracks are queued until rekordbox has analysed them/)).toBeTruthy();
+    expect(screen.getByText(/2 imported as AIFF/)).toBeTruthy();
+    expect(usePendingHotCuesStore.getState().byLibrary['/pioneer/master.db']).toEqual(['11', '12', '13']);
+    expect(screen.getByText(/3 imported tracks wait for hot cues/)).toBeTruthy();
+  });
+
+  it('adds the queued hot cues on request, and reloads the library', async () => {
+    usePendingHotCuesStore.setState({ byLibrary: { '/pioneer/master.db': ['11', '12'] } });
+    api().autoHotCuePreview = vi.fn(async () => ({ success: true, data: {
+      tracks: [{ trackId: '11', title: 'T', artist: 'A', location: '/l', cues: [{ slot: 0, kind: 1, name: 'Intro', ms: 0 }] }],
+      alreadyCued: 0, notAnalysed: 1, withoutDrops: 0, waitingIds: ['12'], cancelled: false,
+    } }));
+    api().autoHotCueWrite = vi.fn(async () => ({ success: true, data: { tracksWritten: 1, cuesWritten: 1, skipped: [], backupPath: '/b' } }));
+    render(<NavidromePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add hot cues now' }));
+    await waitFor(() => expect(context.onLoadLibrary).toHaveBeenCalledWith('/pioneer/master.db'));
+    expect(context.showNotification).toHaveBeenCalledWith('success', expect.stringMatching(/Added 1 hot cue to 1 imported track\. 1 still wait/), { important: true });
+    expect(usePendingHotCuesStore.getState().byLibrary['/pioneer/master.db']).toEqual(['12']);
   });
 });

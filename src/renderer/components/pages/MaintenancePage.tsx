@@ -5,14 +5,14 @@ import { useAppContext } from '../../AppWithRouter';
 import { BrokenEntriesPanel } from '../BrokenEntriesPanel';
 import { ConsolidatePanel } from '../maintenance/ConsolidatePanel';
 import { FilterMovePanel } from '../maintenance/FilterMovePanel';
-import { ConvertFlacPanel } from '../maintenance/ConvertFlacPanel';
+import { ConvertAudioPanel } from '../maintenance/ConvertAudioPanel';
 import { CleanupFlacPanel } from '../maintenance/CleanupFlacPanel';
 import { AutoHotCuePanel } from '../maintenance/AutoHotCuePanel';
 import { ExportPlaylistZipPanel } from '../maintenance/ExportPlaylistZipPanel';
 
 /**
  * Independent tools, each owning its own state: clearing out entries that can
- * never resolve to a file, converting FLAC for players that cannot read it and
+ * never resolve to a file, converting FLAC, WAV and M4A for players that cannot read them well and
  * trashing the FLACs a conversion left behind, adding hot cues from rekordbox's
  * phrase analysis, zipping a playlist's files,
  * gathering the library onto one drive, and moving a filtered part of it. They
@@ -34,12 +34,12 @@ export const MaintenancePage: React.FC = () => {
 
       {/* The worker count moved to Settings; say where, for anyone looking for it here. */}
       <p className="text-xs font-te-mono text-te-grey-500 mt-te-md">
-        How many files Convert FLAC, the FLAC cleanup and Auto hot cues work on at once is set in{' '}
+        How many files Convert audio, the FLAC cleanup and Auto hot cues work on at once is set in{' '}
         <button onClick={() => onOpenSettings?.('performance')} className="text-te-orange hover:underline">
           Settings → Performance
         </button>.
       </p>
-      <ConvertFlacPanel />
+      <ConvertAudioPanel />
       <CleanupFlacPanel />
       <AutoHotCuePanel />
       <ExportPlaylistZipPanel />

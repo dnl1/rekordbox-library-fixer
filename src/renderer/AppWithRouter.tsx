@@ -5,6 +5,8 @@ import { useLibrary, useNotifications } from './hooks';
 import { useRouteData } from './hooks/useRouteData';
 import { NotificationToast, AppFooter, SplashScreen, AboutModal, UpdateModal, TutorialModal, SkeletonCard, NativeDropHandler, MiniPlayer } from './components/ui';
 import { useSettingsStore } from './stores/settingsStore';
+import { usePendingHotCuesStore } from './stores/pendingHotCuesStore';
+import { applyPendingHotCues, describePendingOutcome } from './hotcues/pendingHotCues';
 import { checkForUpdates, openUpdateDialog } from './updates/updateSession';
 import { Library } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
@@ -88,6 +90,22 @@ const AppWithRouter: React.FC = () => {
     // duplicateResults, relocationResults, settings // Unused for now
   } = useRouteData(location.pathname, libraryPath);
 
+
+  // Hot cues a Navidrome import queued: tried each time a database library is
+  // loaded, and written only once rekordbox has analysed the tracks and is
+  // closed. A write reloads the library, which tries again and finds the rest
+  // still waiting — nothing more.
+  useEffect(() => {
+    if (!libraryData || !libraryPath.toLowerCase().endsWith('.db')) { return; }
+    if ((usePendingHotCuesStore.getState().byLibrary[libraryPath] ?? []).length === 0) { return; }
+    void applyPendingHotCues(libraryPath).then((res) => {
+      const message = res.success && res.data ? describePendingOutcome(res.data) : null;
+      if (!message) { return; }
+      showNotification('success', message, { important: true });
+      openLibrary(libraryPath);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryData, libraryPath]);
 
   // Set up menu event listeners
   useEffect(() => {

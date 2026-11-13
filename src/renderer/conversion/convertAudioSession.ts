@@ -1,15 +1,15 @@
 import type {
-  ConversionFormatPayload, ConvertFlacProgress, ConvertFlacRequest, ConvertFlacSummary, IpcResult,
+  ConversionFormatPayload, ConvertAudioProgress, ConvertAudioRequest, ConvertAudioSummary, IpcResult,
 } from '../../main/ipcContract';
 
 export interface ConversionSnapshot {
   running: boolean;
   libraryPath: string;
   format: ConversionFormatPayload | null;
-  progress: ConvertFlacProgress | null;
+  progress: ConvertAudioProgress | null;
   operationId: string | null;
   /** The last finished run, kept until it is dismissed or another starts. */
-  summary: ConvertFlacSummary | null;
+  summary: ConvertAudioSummary | null;
   error: string | null;
 }
 
@@ -48,11 +48,11 @@ export const resetConversionSession = (): void => {
 };
 
 export async function startConversion(
-  request: Omit<ConvertFlacRequest, 'operationId'>
-): Promise<IpcResult<ConvertFlacSummary>> {
+  request: Omit<ConvertAudioRequest, 'operationId'>
+): Promise<IpcResult<ConvertAudioSummary>> {
   if (state.running) { return { success: false, error: 'A conversion is already running.' }; }
 
-  const operationId = `convert-flac-${Date.now()}`;
+  const operationId = `convert-audio-${Date.now()}`;
   emit({
     ...EMPTY,
     running: true,
@@ -61,12 +61,12 @@ export async function startConversion(
     operationId,
   });
 
-  const stopProgress = window.electronAPI.onConvertFlacProgress((p) => {
+  const stopProgress = window.electronAPI.onConvertAudioProgress((p) => {
     if (p.operationId === operationId) { emit({ progress: p }); }
   });
 
   try {
-    const res = await window.electronAPI.convertFlac({ ...request, operationId });
+    const res = await window.electronAPI.convertAudio({ ...request, operationId });
     emit(res.success && res.data
       ? { summary: res.data }
       : { error: res.error ?? 'Conversion failed' });
@@ -83,6 +83,6 @@ export async function startConversion(
 
 export async function cancelConversion(): Promise<void> {
   if (state.operationId && state.running) {
-    await window.electronAPI.cancelConvertFlac(state.operationId);
+    await window.electronAPI.cancelConvertAudio(state.operationId);
   }
 }

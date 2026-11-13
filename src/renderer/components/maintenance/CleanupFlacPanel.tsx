@@ -109,8 +109,8 @@ export const CleanupFlacPanel: React.FC = () => {
                   {preview.files === 0 && <div className="text-te-grey-600">Nothing to clean up.</div>}
                   {preview.stillUsed > 0 && (
                     <div className="text-te-grey-600">
-                      {preview.stillUsed} more still have an entry pointing at them — Convert FLAC with
-                      &quot;Move the FLAC originals to the trash&quot; ticked re-points those entries and trashes them
+                      {preview.stillUsed} more still have an entry pointing at them — Convert audio with
+                      &quot;Move the originals to the trash&quot; ticked re-points those entries and trashes them
                     </div>
                   )}
                 </>

@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { planFlacCleanup, flacBeside, cleanupFlacs, type CleanupDeps } from '../../src/main/flacCleanup';
-import { FlacConverter } from '../../src/main/flacConverter';
+import { AudioConverter } from '../../src/main/audioConverter';
 import { resolveFfmpegPath } from '../../src/main/ffmpegBinary';
 
 const on = (...files: string[]) => (p: string) => files.includes(p);
@@ -143,7 +143,7 @@ const ffmpeg = resolveFfmpegPath({
   arch: process.arch,
 });
 
-describe.skipIf(!ffmpeg)('FlacConverter.sameAudio with the bundled ffmpeg', () => {
+describe.skipIf(!ffmpeg)('AudioConverter.sameAudio with the bundled ffmpeg', () => {
   let dir: string;
   const run = (args: string[]) => execFileSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
   const tone = (freq: number, out: string, codec: string[]) =>
@@ -159,7 +159,7 @@ describe.skipIf(!ffmpeg)('FlacConverter.sameAudio with the bundled ffmpeg', () =
 
   afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
-  const converter = () => new FlacConverter(ffmpeg!);
+  const converter = () => new AudioConverter(ffmpeg!);
 
   it('matches a FLAC with its AIFF', async () => {
     expect(await converter().sameAudio(path.join(dir, 'a.flac'), path.join(dir, 'a.aiff'), { cancelled: false })).toBeNull();

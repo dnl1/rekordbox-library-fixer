@@ -1,10 +1,10 @@
-import { app, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
 import { withReadOnlyCopy } from '../rekordboxDbParser';
 import { readHotCueCandidates, writeHotCuesToDb } from '../rekordboxDbHotCues';
 import { readTrackAnalysis } from '../anlzReader';
 import { isUsableGrid, suggestHotCues } from '../autoHotCue';
 import { barLevels, decodeBass, findDrops } from '../bassDrops';
-import { resolveFfmpegPath } from '../ffmpegBinary';
+import { appFfmpegPath } from '../appFfmpeg';
 import { hostEnvironment, toHostPath } from '../hostPath';
 import { runPool } from '../workerPool';
 import { isRekordboxDatabasePath } from '../librarySource';
@@ -19,13 +19,7 @@ const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
 /** Suggestion runs in flight, so a cancel can reach the one it names. */
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
-const ffmpegPath = () => resolveFfmpegPath({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  appPath: app.getAppPath(),
-  platform: process.platform,
-  arch: process.arch,
-});
+const ffmpegPath = appFfmpegPath;
 
 /**
  * Auto hot cues: suggest them from rekordbox's phrase analysis and the drops in
@@ -45,9 +39,13 @@ export function registerHotCueIpc(): void {
     try {
       // Read on a copy, as loading is, so rekordbox may stay open while you look.
       const candidates = await withReadOnlyCopy(libraryPath, dbKey, (db) => readHotCueCandidates(db, scopeTrackIds));
+      // Tracks rekordbox has not analysed yet are named, so whoever waits on
+      // them — an import that asked for hot cues — knows which to try again.
+      const waitingIds: string[] = [];
       const analysed = candidates.tracks.flatMap((track) => {
         const { grid, phrases } = readTrackAnalysis(libraryPath, track.analysisDataPath);
-        return grid && phrases && isUsableGrid(grid) ? [{ track, grid, phrases }] : [];
+        if (!grid || !phrases) { waitingIds.push(track.id); return []; }
+        return isUsableGrid(grid) ? [{ track, grid, phrases }] : [];
       });
       const notAnalysed = candidates.tracks.length - analysed.length;
 
@@ -85,6 +83,7 @@ export function registerHotCueIpc(): void {
           alreadyCued: candidates.alreadyCued,
           notAnalysed: notAnalysed + (cancelToken.cancelled ? 0 : analysed.length - tracks.length),
           withoutDrops,
+          waitingIds,
           cancelled: cancelToken.cancelled,
         },
       };

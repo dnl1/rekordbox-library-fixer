@@ -20,7 +20,7 @@ const EMPTY: HotCueSnapshot = {
  * Suggesting hot cues decodes every track's bass, which on a whole collection
  * takes minutes. The run lives here, outside its panel, so switching tabs
  * meanwhile neither loses its progress nor its result — the pattern of
- * `convertFlacSession`.
+ * `convertAudioSession`.
  */
 let state: HotCueSnapshot = EMPTY;
 const listeners = new Set<() => void>();

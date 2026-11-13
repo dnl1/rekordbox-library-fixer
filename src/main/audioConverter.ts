@@ -6,13 +6,19 @@ import { isStreamingLocation } from './brokenEntries';
 import { runPool } from './workerPool';
 
 /**
- * Convert FLAC files to AIFF, WAV or MP3 with the bundled ffmpeg.
+ * Convert FLAC, WAV and M4A files to AIFF, WAV or MP3 with the bundled ffmpeg.
  *
- * FLAC plays on current players but not on older CDJs and XDJs, and a DJ with
- * a FLAC collection finds out at the club. AIFF and WAV are uncompressed PCM
- * decoded from a lossless source, so that conversion is sample-exact: no
+ * FLAC and ALAC play on current players but not on older CDJs and XDJs, and a
+ * DJ with such a collection finds out at the club; WAV plays, but carries
+ * almost no tags or artwork. AIFF and WAV are uncompressed PCM, so from a
+ * lossless source — FLAC, WAV, ALAC — the conversion is sample-exact: no
  * encoder delay moves the audio, and every cue, loop and beatgrid stored in
  * milliseconds still lands where it did.
+ *
+ * An M4A holds either ALAC (lossless) or AAC (lossy). AAC decoded to AIFF
+ * sounds exactly as the M4A did, only bigger; it is not sample-exact, since
+ * the decoder trims the encoder's priming, so its length is held to the same
+ * tolerance as an MP3's.
  *
  * AIFF is the better of the two. It carries ID3 tags and artwork, which
  * rekordbox reads; WAV keeps only a RIFF INFO list, which rekordbox largely
@@ -24,11 +30,35 @@ import { runPool } from './workerPool';
  * constant bit rate, because older CDJs misread the length of a variable-rate
  * file and seek to the wrong place in it. It is not sample-exact — the encoder
  * adds a little silence at the start, and players that ignore the gapless
- * header hear cues a few milliseconds late — and it is lossy, so the FLAC is
- * the only lossless copy there is.
+ * header hear cues a few milliseconds late — and it is lossy, so a lossless
+ * original is the only lossless copy there is.
  */
 
 export type ConversionFormat = 'aiff' | 'wav' | 'mp3';
+
+/** What the converter reads. AIFF and MP3 already play everywhere, so they are never sources. */
+export type SourceKind = 'flac' | 'wav' | 'm4a';
+
+export const SOURCE_KINDS: readonly SourceKind[] = ['flac', 'wav', 'm4a'];
+
+/** The source kind of a file, from its extension; null for anything the converter does not read. */
+export function sourceKind(location: string): SourceKind | null {
+  const ext = path.extname(location || '').toLowerCase().slice(1);
+  return (SOURCE_KINDS as readonly string[]).includes(ext) ? (ext as SourceKind) : null;
+}
+
+/**
+ * Whether a file is converted to `format`: one of the `sources` asked for, and
+ * not already that format — a WAV is never "converted" to WAV.
+ */
+export function isConvertible(
+  location: string,
+  format: ConversionFormat,
+  sources: readonly SourceKind[] = SOURCE_KINDS
+): boolean {
+  const kind = sourceKind(location);
+  return kind !== null && sources.includes(kind) && kind !== format;
+}
 
 export const isLosslessFormat = (format: ConversionFormat): boolean => format !== 'mp3';
 
@@ -112,12 +142,16 @@ export interface AudioShape {
   channels: number;
   /** Sample frames; 0 when the file does not say. */
   samples: number;
+  /** Seconds; 0 when the file does not say. */
+  duration?: number;
+  /**
+   * False for lossy audio — AAC, MP3 — and for floating-point WAV: its
+   * decoded length is not exact, so a conversion is held to a tolerance.
+   */
+  lossless: boolean;
 }
 
 export type CancelToken = { cancelled: boolean };
-
-export const isFlacLocation = (location: string): boolean =>
-  path.extname(location || '').toLowerCase() === '.flac';
 
 /**
  * `Track.flac` becomes `Track.aiff` beside it — the folders do not change.
@@ -137,6 +171,10 @@ export function convertedPath(location: string, format: ConversionFormat): strin
  * macOS keeps both spellings of an accent in the same library, and comparing
  * them raw would convert one file twice.
  *
+ * `Track.flac` and `Track.wav` side by side both become `Track.aiff`. Only the
+ * first is converted in a run; the other is skipped, and the next run checks
+ * it against that AIFF like any file already at its destination.
+ *
  * A destination that already exists is never overwritten. For AIFF and WAV it
  * becomes a job to check: a run that stopped before writing the library — the
  * app closed, the machine slept — leaves complete conversions behind, and
@@ -148,14 +186,17 @@ export function convertedPath(location: string, format: ConversionFormat): strin
 export function planConversions(
   tracks: ConvertibleTrack[],
   format: ConversionFormat,
-  exists: (p: string) => boolean = fs.existsSync
+  exists: (p: string) => boolean = fs.existsSync,
+  sources: readonly SourceKind[] = SOURCE_KINDS
 ): ConversionPlan {
   const jobs = new Map<string, ConversionJob>();
+  /** Destination (NFC, case-folded: macOS and Windows see one file) → the source that claimed it. */
+  const claimed = new Map<string, string>();
   const skipped: ConversionSkip[] = [];
 
   for (const track of tracks) {
     const location = (track.location || '').trim();
-    if (!location || isStreamingLocation(location) || !isFlacLocation(location)) { continue; }
+    if (!location || isStreamingLocation(location) || !isConvertible(location, format, sources)) { continue; }
 
     const key = location.normalize('NFC');
     const existing = jobs.get(key);
@@ -166,6 +207,16 @@ export function planConversions(
       continue;
     }
     const destination = convertedPath(location, format);
+    const destinationKey = destination.normalize('NFC').toLowerCase();
+    const claimant = claimed.get(destinationKey);
+    if (claimant !== undefined && claimant !== key) {
+      skipped.push({
+        trackId: track.id, location, kind: 'exists',
+        reason: `${path.basename(claimant)} becomes ${path.basename(destination)} too — convert again afterwards and this one is checked against it`,
+      });
+      continue;
+    }
+    claimed.set(destinationKey, key);
     if (exists(destination) && isLosslessFormat(format)) {
       jobs.set(key, { source: location, destination, trackIds: [track.id], size: track.size, existing: true });
       continue;
@@ -205,7 +256,7 @@ export function mp3SampleRate(sampleRate: number): number {
   return sampleRate % 44100 === 0 ? 44100 : 48000;
 }
 
-/** The encoder for a source: FLAC's 16 and 24 bits map straight across to PCM. */
+/** The encoder for a source: 16 and 24 bits map straight across to PCM; AAC decodes to 16. */
 export function outputShape(
   format: ConversionFormat,
   source: { sampleRate: number; bitsPerSample: number; channels: number }
@@ -328,8 +379,9 @@ const { parseFile } = require('music-metadata') as {
 export async function probeAudio(file: string): Promise<AudioShape> {
   const { format } = await parseFile(file, { duration: true, skipCovers: true });
   const sampleRate = format.sampleRate ?? 0;
-  // FLAC reports its length as a duration computed from the sample count, so
-  // multiplying back gives the exact count; AIFF and WAV report it directly.
+  // FLAC and ALAC report their length as a duration computed from the sample
+  // count, so multiplying back gives the exact count; AIFF and WAV report it
+  // directly. AAC's is an estimate, which is why it gets a tolerance.
   const samples = format.numberOfSamples
     ?? (format.duration && sampleRate ? Math.round(format.duration * sampleRate) : 0);
   return {
@@ -337,19 +389,27 @@ export async function probeAudio(file: string): Promise<AudioShape> {
     bitsPerSample: format.bitsPerSample ?? 16,
     channels: format.numberOfChannels ?? 0,
     samples,
+    duration: format.duration ?? 0,
+    // Unknown counts as lossless: the exact check is the stricter one, and a
+    // conversion it wrongly refuses is reported, never written.
+    lossless: format.lossless !== false,
   };
 }
 
-/** MP3 frames pad the end and the encoder delays the start; a tenth of a second covers both. */
-const MP3_LENGTH_TOLERANCE_SECONDS = 0.1;
+/**
+ * MP3 frames pad the end and the encoder delays the start, and AAC's decoder
+ * trims a priming the container only estimates; a tenth of a second covers both.
+ */
+const LOSSY_LENGTH_TOLERANCE_SECONDS = 0.1;
 
 /**
  * Why a converted file cannot be trusted, or null when it can.
  *
- * For AIFF and WAV the sample count must match exactly: a file a few frames
- * short sounds fine, but it is not the recording that was converted. MP3
- * cannot match exactly, so its length is held to a tolerance instead — still
- * enough to catch a conversion that stopped partway.
+ * From a lossless source to AIFF or WAV the sample count must match exactly:
+ * a file a few frames short sounds fine, but it is not the recording that was
+ * converted. MP3, and anything decoded from AAC, cannot match exactly, so its
+ * length is held to a tolerance instead — still enough to catch a conversion
+ * that stopped partway.
  */
 export function verifyConversion(
   source: AudioShape,
@@ -364,28 +424,28 @@ export function verifyConversion(
     return `channel count changed (${source.channels} → ${output.channels})`;
   }
   if (output.samples <= 0) { return 'the converted file holds no audio'; }
+  if (format !== 'mp3' && output.bitsPerSample !== expected.bits) {
+    return `bit depth is ${output.bitsPerSample}, expected ${expected.bits}`;
+  }
 
-  if (format === 'mp3') {
+  if (format === 'mp3' || !source.lossless) {
     if (source.samples > 0 && source.sampleRate > 0) {
       const before = source.samples / source.sampleRate;
       const after = output.samples / output.sampleRate;
-      if (Math.abs(after - before) > MP3_LENGTH_TOLERANCE_SECONDS) {
+      if (Math.abs(after - before) > LOSSY_LENGTH_TOLERANCE_SECONDS) {
         return `length changed (${before.toFixed(2)} s → ${after.toFixed(2)} s)`;
       }
     }
     return null;
   }
 
-  if (output.bitsPerSample !== expected.bits) {
-    return `bit depth is ${output.bitsPerSample}, expected ${expected.bits}`;
-  }
   if (source.samples > 0 && output.samples !== source.samples) {
     return `length changed (${source.samples} → ${output.samples} samples)`;
   }
   return null;
 }
 
-export class FlacConverter {
+export class AudioConverter {
   constructor(private readonly ffmpegPath: string) {}
 
   /**
@@ -437,7 +497,7 @@ export class FlacConverter {
   ): Promise<void> {
     const temp = `${job.destination}.part`;
     try {
-      const source = await probeAudio(job.source);
+      const source = await this.probeSource(job.source);
       const shape = outputShape(format, source);
 
       // Checked again here: the plan may be minutes old by the time its turn comes.
@@ -518,7 +578,13 @@ export class FlacConverter {
     try { existing = await probeAudio(existingPath); } catch { return 'it cannot be read'; }
     const mismatch = verifyConversion(source, existing, shape, format);
     if (mismatch) { return mismatch; }
-    const [a, b] = [await this.pcmDigest(sourcePath, cancelToken), await this.pcmDigest(existingPath, cancelToken)];
+    // Hashed at the depth the conversion writes, not widened: AAC decodes to
+    // floating point, and only rounding it to 16 bits as the conversion did
+    // gives the samples the AIFF holds.
+    const [a, b] = [
+      await this.pcmDigest(sourcePath, cancelToken, shape.bits),
+      await this.pcmDigest(existingPath, cancelToken, shape.bits),
+    ];
     return a === b ? null : 'the audio differs';
   }
 
@@ -545,16 +611,52 @@ export class FlacConverter {
     return x === y ? null : 'the audio differs';
   }
 
-  /** An MD5 of the decoded audio, widened to 32 bits so any source bit depth compares. */
-  private async pcmDigest(file: string, cancelToken: CancelToken): Promise<string> {
+  /** An MD5 of the decoded audio at `bits`; 32 by default, so any source bit depth compares. */
+  private async pcmDigest(file: string, cancelToken: CancelToken, bits = 32): Promise<string> {
     const out = await this.run(
-      ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:a:0', '-c:a', 'pcm_s32le', '-f', 'md5', '-'],
+      ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:a:0', '-c:a', `pcm_s${bits}le`, '-f', 'md5', '-'],
       cancelToken,
       true
     );
     const digest = out.match(/MD5=([0-9a-f]{32})/i)?.[1];
     if (!digest) { throw new Error('could not read the audio to compare it'); }
     return digest;
+  }
+
+  /**
+   * `probeAudio`, with the sample rate asked of ffmpeg when the tags do not
+   * give it. An MP4 stores the rate in a 16-bit field, so an ALAC above
+   * 65.5 kHz — a 96 kHz download — reads as 0 there; the real rate is in
+   * the ALAC header, which ffmpeg reads and music-metadata does not.
+   */
+  async probeSource(file: string): Promise<AudioShape> {
+    const shape = await probeAudio(file);
+    if (shape.sampleRate > 0) { return shape; }
+    const sampleRate = await this.streamSampleRate(file);
+    if (!sampleRate) { return shape; }
+    const samples = shape.samples || (shape.duration ? Math.round(shape.duration * sampleRate) : 0);
+    return { ...shape, sampleRate, samples };
+  }
+
+  /** The first audio stream's rate, from what ffmpeg prints about its input; 0 when it says nothing. */
+  private streamSampleRate(file: string): Promise<number> {
+    return new Promise((resolve) => {
+      let stderr = '';
+      let child: ChildProcess;
+      try {
+        // No output given: ffmpeg describes the input, then exits with an error — expected here.
+        child = spawn(this.ffmpegPath, ['-hide_banner', '-nostdin', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+      } catch {
+        resolve(0);
+        return;
+      }
+      child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      child.on('error', () => resolve(0));
+      child.on('close', () => {
+        const rate = /Audio: [^\n]*?, (\d+) Hz/.exec(stderr)?.[1];
+        resolve(rate ? Number(rate) : 0);
+      });
+    });
   }
 
   /** Run ffmpeg to completion, killing it as soon as the run is cancelled. */

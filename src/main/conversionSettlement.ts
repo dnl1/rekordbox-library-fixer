@@ -1,4 +1,4 @@
-import { convertedPath, type ConversionFormat, type ConvertedFile } from './flacConverter';
+import { convertedPath, type ConversionFormat, type ConvertedFile } from './audioConverter';
 import type { ConversionWritePlan, ConversionWriteSkip } from './rekordboxDbConverter';
 
 /**

@@ -130,20 +130,22 @@ Tracks whose file is merely **gone** are behind an opt-in tick box. The relocato
 
 Streaming tracks are never listed, whatever you tick. Every id is re-checked against the library before it goes, so an entry whose file turns out to be there — a drive that was unmounted during the scan and is back now — is left alone and reported.
 
-### Convert FLAC for older players
-Older CDJs and XDJs cannot play FLAC, and a FLAC collection finds that out at the club. **Maintenance → Convert FLAC** converts every FLAC in the library to a file beside it, under the same name, and points each entry at the new file. Cues, loops, beatgrids and playlists stay with the track — only what the file is changes.
+### Convert audio for older players
+Older CDJs and XDJs cannot play FLAC or ALAC, and a FLAC collection finds that out at the club; WAV plays, but carries almost no tags or artwork. **Maintenance → Convert audio** converts every FLAC, WAV and M4A in the library to a file beside it, under the same name, and points each entry at the new file. Cues, loops, beatgrids and playlists stay with the track — only what the file is changes. Checkboxes pick which kinds to convert, and a file already in the target format stays as it is.
+
+An M4A holds either ALAC or AAC. ALAC is lossless and converts sample-exact, like FLAC and WAV. AAC is already lossy: its AIFF or WAV sounds exactly as the M4A did, only bigger, and since the decoder trims the encoder's priming, a cue can land a few milliseconds off, as with MP3.
 
 | Target | What you get |
 |--------|--------------|
-| **AIFF** (recommended) | Lossless and sample-exact, same bit depth and sample rate. Tags and artwork are kept (ID3v2.3), which rekordbox reads. |
-| **WAV** | Lossless and sample-exact. The header is written as plain PCM, which older CDJs require. Tags and artwork mostly do not survive — WAV has nowhere rekordbox reads them from. |
-| **MP3 320 kbps** | A quarter of the size, constant bit rate (older CDJs misjudge the length of a variable-rate file). Lossy, and not sample-exact: the encoder adds a few milliseconds at the start, so on a player that ignores the gapless header cues land slightly late. High-resolution FLAC is resampled to 44.1 or 48 kHz. |
+| **AIFF** (recommended) | Uncompressed; sample-exact from FLAC, WAV and ALAC, same bit depth and sample rate. Tags and artwork are kept (ID3v2.3), which rekordbox reads. |
+| **WAV** | Uncompressed; sample-exact from FLAC and ALAC. The header is written as plain PCM, which older CDJs require. Tags and artwork mostly do not survive — WAV has nowhere rekordbox reads them from. |
+| **MP3 320 kbps** | A quarter of the size, constant bit rate (older CDJs misjudge the length of a variable-rate file). Lossy, and not sample-exact: the encoder adds a few milliseconds at the start, so on a player that ignores the gapless header cues land slightly late. High-resolution audio is resampled to 44.1 or 48 kHz. |
 
-**Converting for a USB export.** Pick the playlist (or folder) you are about to export instead of the whole library, convert it, then export that playlist from rekordbox as usual — rekordbox copies the converted files to the stick. Only the chosen entries are converted; a FLAC that an entry outside the playlist still uses is never sent to the trash, even with the trash option ticked.
+**Converting for a USB export.** Pick the playlist (or folder) you are about to export instead of the whole library, convert it, then export that playlist from rekordbox as usual — rekordbox copies the converted files to the stick. Only the chosen entries are converted; an original that an entry outside the playlist still uses is never sent to the trash, even with the trash option ticked.
 
-Every converted file is written under a temporary name and checked before it takes the real one — same sample rate, channels and bit depth, and for AIFF and WAV the exact same number of samples. A file already sitting at the destination is never overwritten. If it is an AIFF or WAV — usually left by a run that stopped before writing the library — it is decoded and compared with the FLAC, and used as it is when the audio is identical; a run can be picked up where it stopped instead of finding nothing to do. The originals stay unless you tick **Move the FLAC originals to the trash**, and even then an original goes only once every entry that used it points at its conversion. On `master.db` rekordbox must be closed and a backup is taken first; if the database write fails, the new files are removed again and the FLACs were never touched.
+Every converted file is written under a temporary name and checked before it takes the real one — same sample rate, channels and bit depth, and for AIFF and WAV from a lossless original the exact same number of samples (MP3 and AAC are held to a tenth of a second). A file already sitting at the destination is never overwritten. If it is an AIFF or WAV — usually left by a run that stopped before writing the library — it is decoded and compared with the original, and used as it is when the audio is identical; a run can be picked up where it stopped instead of finding nothing to do. When two originals would land on one name, `Track.flac` and `Track.wav` both becoming `Track.aiff`, one is converted and the other is checked against it on the next run. The originals stay unless you tick **Move the originals to the trash**, and even then an original goes only once every entry that used it points at its conversion. On `master.db` rekordbox must be closed and a backup is taken first; if the database write fails, the new files are removed again and the originals were never touched.
 
-An XML library can be converted too, but rekordbox matches an imported track by its location, so importing the XML adds the converted files as new tracks next to the FLACs. Open the database instead to convert in place.
+An XML library can be converted too, but rekordbox matches an imported track by its location, so importing the XML adds the converted files as new tracks next to the originals. Open the database instead to convert in place.
 
 Running the app under WSL against a Windows library works too: rekordbox's `C:/…` paths are reached through `/mnt/c/…` for the conversion, and written back as `C:/…`.
 
@@ -156,6 +158,10 @@ A backup manager reachable at any time, with or without a library loaded. Lists 
 Import tracks and playlists from your own [Navidrome](https://www.navidrome.org/) server into rekordbox. Type the server address, username and password in **Settings → Navidrome**: the password is checked against the server, then kept on this computer only, encrypted by the system keychain — the server receives a one-time token, never the password itself.
 
 The **Navidrome** page lists your playlists and searches your songs. Pick any of either, and **Import into rekordbox** downloads the original files — never transcoded — into a folder (by default `Navidrome` in your Music folder), keeping the server's Artist/Album folders, and adds them to rekordbox's database: a playlist as a playlist of the same name, in the same order, and searched songs to the collection. rekordbox analyses the new tracks itself the first time it opens them. Formats rekordbox cannot play, such as Ogg and Opus, are left on the server. rekordbox must be closed, a backup is taken first, and a file an earlier run already downloaded is used instead of fetched again. For rekordbox's database only.
+
+**Import into rekordbox** first asks two things, ticked as you left them last time:
+- **Convert to AIFF**: the FLAC, WAV and M4A files are converted to AIFF before anything is written, and rekordbox gets the AIFF. MP3 and AIFF files come in as they are, and a file that will not convert is imported as it was. Each original the import downloaded is removed once the database points at its AIFF; the server still has it, and a file that was already in the folder is never removed.
+- **Add hot cues**: the imported tracks get hot cues as **Maintenance → Auto hot cues** places them. The cues sit on rekordbox's phrase analysis, which a new track only has once rekordbox has analysed it (when it first loads the track, or with Analyze Track), so the tracks wait in a queue. Close rekordbox afterwards: the cues are written the next time the app opens the library, or straight away with **Add hot cues now** on the Navidrome page. A backup is taken first, and a track rekordbox has not analysed yet stays queued.
 
 ### Settings
 Every setting in one place, reached from the sidebar with or without a library loaded. A menu on the left picks the section: **Duplicate Detection** (detection methods, which copy is kept, path preferences), **Track Relocation** (where missing tracks are searched for, and how close a match must be) and **Performance** (how many files the Maintenance tools work on at once). The Settings buttons on the Duplicates and Relocate pages open their own section.
@@ -501,8 +507,8 @@ Free for personal use. No ads, no subscriptions, no limits.
 - In-app track preview — play/pause/seek/volume from any track row, with AIFF support
 - Relocator: handles libraries with thousands of missing tracks without crashing; safe cancellation; search settings now persist
 
-**FLAC conversion**
-- Convert FLAC files to WAV or AIFF for compatibility with older CDJs (CDJ-2000NXS and earlier) that don't support FLAC playback
+**Audio conversion**
+- Convert FLAC, WAV and M4A files to AIFF, WAV or MP3 for compatibility with older CDJs (CDJ-2000NXS and earlier) that don't support FLAC or ALAC playback
 - Batch conversion with original file preservation
 - Automatic library location update after conversion
 

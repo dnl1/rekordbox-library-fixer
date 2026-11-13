@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { writePlansFor, settleConversions, applyConversionsToLibrary, locationsStillUsed } from '../../src/main/conversionSettlement';
 import { resolveFfmpegPath } from '../../src/main/ffmpegBinary';
-import type { ConvertedFile } from '../../src/main/flacConverter';
+import type { ConvertedFile } from '../../src/main/audioConverter';
 
 const file = (trackIds: string[], name = 'Song'): ConvertedFile => ({
   trackIds, oldLocation: `/m/${name}.flac`, newLocation: `/m/${name}.aiff`, format: 'aiff',

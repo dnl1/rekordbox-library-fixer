@@ -1,6 +1,6 @@
 // Global types and interfaces
 import type {
-  IpcResult, RecoveredDbKey, ConversionFormatPayload, ConvertFlacPreview, ConvertFlacRequest, ConvertFlacProgress, ConvertFlacSummary,
+  IpcResult, RecoveredDbKey, ConversionFormatPayload, ConversionSourcePayload, ConvertAudioPreview, ConvertAudioRequest, ConvertAudioProgress, ConvertAudioSummary,
   FlacCleanupPreview, FlacCleanupRequest, FlacCleanupProgress, FlacCleanupSummary,
   AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary, AutoHotCueProgress,
   UpdateCheckResult, UpdateDownloadProgress, UpdateInstallResult,
@@ -264,11 +264,11 @@ declare global {
       consolidateLibrary: (data: { operationId: string; tracks: any[]; libraryPath: string; options: any }) => Promise<any>;
       cancelConsolidate?: (operationId: string) => Promise<any>;
       onConsolidateProgress?: (callback: (progress: any) => void) => () => void;
-      // FLAC → AIFF / WAV
-      convertFlacPreview: (data: { tracks: any[]; format: ConversionFormatPayload; scopeTrackIds?: string[] }) => Promise<IpcResult<ConvertFlacPreview>>;
-      convertFlac: (data: ConvertFlacRequest) => Promise<IpcResult<ConvertFlacSummary>>;
-      cancelConvertFlac: (operationId: string) => Promise<{ success: boolean }>;
-      onConvertFlacProgress: (callback: (progress: ConvertFlacProgress) => void) => () => void;
+      // FLAC, WAV and M4A → AIFF, WAV or MP3
+      convertAudioPreview: (data: { tracks: any[]; format: ConversionFormatPayload; scopeTrackIds?: string[]; sources?: ConversionSourcePayload[] }) => Promise<IpcResult<ConvertAudioPreview>>;
+      convertAudio: (data: ConvertAudioRequest) => Promise<IpcResult<ConvertAudioSummary>>;
+      cancelConvertAudio: (operationId: string) => Promise<{ success: boolean }>;
+      onConvertAudioProgress: (callback: (progress: ConvertAudioProgress) => void) => () => void;
       cleanupFlacPreview: (data: { tracks: any[] }) => Promise<IpcResult<FlacCleanupPreview>>;
       cleanupFlac: (data: FlacCleanupRequest) => Promise<IpcResult<FlacCleanupSummary>>;
       onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => () => void;

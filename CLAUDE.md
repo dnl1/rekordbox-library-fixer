@@ -98,18 +98,26 @@ collection has to go through the database.
   stored. Nothing runs Python: offline, the panel still shows the pyrekordbox command for pasting the key
   by hand. Tests use a made-up wheel
   (`tests/fixtures/fake-pyrekordbox.whl`); the real key never enters the repo.
-- **FLAC conversion** (`src/main/flacConverter.ts`, `rekordboxDbConverter.ts`, `conversionSettlement.ts`,
-  `ipc/conversion.ts`, `components/maintenance/ConvertFlacPanel.tsx`): FLAC → AIFF, WAV or MP3 320 kbps CBR
-  beside the original, for players that cannot read FLAC. Runs a bundled ffmpeg (`ffmpegBinary.ts`): the
+- **Audio conversion** (`src/main/audioConverter.ts`, `rekordboxDbConverter.ts`, `conversionSettlement.ts`,
+  `ipc/conversion.ts`, `components/maintenance/ConvertAudioPanel.tsx`): FLAC, WAV and M4A (AAC or ALAC) → AIFF,
+  WAV or MP3 320 kbps CBR beside the original, for players that cannot read FLAC or ALAC, and because WAV carries
+  almost no tags. `sourceKind`/`isConvertible` decide what is a source: a file already in the target format never
+  is, and a run can be limited to some kinds (`sources`). Two sources that would land on one name (`Track.flac`,
+  `Track.wav` → `Track.aiff`) are never converted in one run: the second is skipped and checked against the first's
+  result on the next. Runs a bundled ffmpeg (`ffmpegBinary.ts`, `appFfmpeg.ts`): the
   binaries are fetched per platform and arch into `vendor/ffmpeg/` by `scripts/fetch-ffmpeg.mjs`, checked
   against pinned SHA-256s, and shipped as `extraResources` under `resources/ffmpeg/`. Never an ffmpeg from
-  the PATH. The order is the safety: convert under a `.part` name, verify (exact sample count for AIFF/WAV,
-  a length tolerance for MP3), rename, write the library once — an AIFF/WAV already at the destination is
-  adopted only if its decoded PCM hashes the same as the FLAC's (`adopted`, never removed by cleanup), so an
-  interrupted run resumes — and only then trash an original — if asked,
+  the PATH. The order is the safety: convert under a `.part` name, verify (exact sample count for AIFF/WAV from a
+  lossless source, a 0.1 s length tolerance for MP3 and for AAC, whose decoder trims a priming the container only
+  estimates), rename, write the library once — an AIFF/WAV already at the destination is adopted only if its decoded
+  PCM hashes the same as the original's, hashed at the depth the conversion writes since AAC decodes to floating
+  point (`adopted`, never removed by cleanup), so an interrupted run resumes — and only then trash an original — if
+  asked,
   and only when every entry that used it moved. A failed library write removes the new files. In
   `master.db` the write also sets `FileType` (MP3 1, WAV 11, AIFF 12), `FileSize`, `BitRate`, `BitDepth`
-  and `SampleRate`, and re-checks each entry still points at the FLAC it was planned from. ffmpeg writes
+  and `SampleRate`, and re-checks each entry still points at the file it was planned from. music-metadata
+  10.9 reads a 96 kHz ALAC's sample rate as 0 (the MP4 field is 16 bits), so `AudioConverter.probeSource` asks
+  ffmpeg for the rate when it gets 0. ffmpeg writes
   24-bit WAV as WAVE_FORMAT_EXTENSIBLE, which older CDJs refuse, so the header is patched in place to
   plain PCM plus a `JUNK` chunk of the same size. `music-metadata` is required rather than imported in
   the converter: the renderer's tsconfig also checks `src/main` and resolves the package to its browser
@@ -117,13 +125,13 @@ collection has to go through the database.
   listed by `src/renderer/utils/playlistScopes.ts`) — the step before exporting that playlist to USB from
   rekordbox, which copies the converted files; the app does not write USB exports itself. The whole
   library is still sent, because an original may be trashed only if no entry outside the scope uses it
-  (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertFlacSession.ts`, not
+  (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertAudioSession.ts`, not
   the panel: the library reload after a write replaces the whole page with a spinner, which unmounted the
   panel at the moment its result arrived.
 - **Cleaning up converted FLACs** (`src/main/flacCleanup.ts`, `components/maintenance/CleanupFlacPanel.tsx`,
   `conversion/flacCleanupSession.ts`): trashes a `Track.flac` left beside the `Track.aiff`/`.wav` the library uses.
   It goes only when no entry points at the FLAC, an entry points at the conversion, and the two decode to the same
-  audio (`FlacConverter.sameAudio`: rate, channels, length, and the MD5 of the PCM widened to 32 bits, so a 16-bit
+  audio (`AudioConverter.sameAudio`: rate, channels, length, and the MD5 of the PCM widened to 32 bits, so a 16-bit
   FLAC matches a 24-bit AIFF another tool made). `master.db` only — an XML library does not say what rekordbox
   itself uses. Nothing is written into the database; its locations are re-read (`parseDb`, on a copy) after the
   checks and before the trash, and a cancelled run trashes nothing. A FLAC an entry still uses is Convert's job.
@@ -141,10 +149,21 @@ collection has to go through the database.
   strictly increasing is refused (a real library has one that jumps back). The write re-checks each track still has
   no hot cue, with rekordbox closed and a backup first. No colours yet: how `Color`/`ColorTableIndex` map to
   rekordbox's hot cue palette is not verified, so cues are written uncoloured (`Color` -1).
-- **Workers** (`src/main/workerPool.ts`, `components/maintenance/WorkersPanel.tsx`): Convert FLAC, Clean up converted
-  FLACs and Auto hot cues work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
+- **Workers** (`src/main/workerPool.ts`, `components/settings/WorkersPanel.tsx`): Convert audio, Clean up converted
+  FLACs, Auto hot cues and a Navidrome import's AIFF conversion work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
   `runPool` reports how many are busy, and every run's progress shows it. On a real library, 1332 tracks' bass
   analysis took 6.5 minutes with four.
+- **Navidrome import options** (`components/navidrome/NavidromeImportModal.tsx`, `navidrome/importRun.ts`,
+  `stores/pendingHotCuesStore.ts`, `hotcues/pendingHotCues.ts`): "Import into rekordbox" opens a dialog with two
+  choices, remembered in the settings store. *Convert to AIFF* runs the downloaded FLAC, WAV and M4A files through the
+  same `AudioConverter` before the database write and imports the AIFF (MP3 and AIFF as they are); a file that will
+  not convert is imported as it was. The originals this run downloaded are removed once the database points at their
+  AIFF (the server keeps them); a file already in the folder never is. *Add hot cues* cannot run at import: cues are
+  placed on rekordbox's phrase analysis, and an imported track has none until rekordbox analyses it. The imported
+  `djmdContent.ID`s (`contentIds` from `applyImport`) are queued per library, persisted, and `applyPendingHotCues`
+  writes every suggestion for those analysed by then — each time a database library loads (`AppWithRouter`) and from
+  the Navidrome page — with rekordbox closed and a backup first. The hot cue preview names the tracks with no analysis
+  files (`waitingIds`); only those stay queued.
 - **Updates** (`src/main/appUpdate.ts`, `ipc/updates.ts`, `src/renderer/updates/updateSession.ts`,
   `components/ui/UpdateModal.tsx`): new versions from the GitHub releases of `dnl1/rekordbox-library-fixer`
   (`UPDATE_REPO`; `build.publish` points there too). Not electron-updater: its macOS path needs a signed app. A beta
@@ -347,12 +366,12 @@ exposed through `window.electronAPI`:
   the GitHub releases; the menu's Check for Updates arrives as `onShowUpdates`
 - `choosePlaylistZipPath(name)` / `playlistZipPreview(data)` / `exportPlaylistZip(request)` / `cancelPlaylistZip(id)` /
   `onPlaylistZipProgress(cb)`: a playlist's files as a zip
-- `convertFlacPreview(data)` / `convertFlac(request)` / `cancelConvertFlac(id)` / `onConvertFlacProgress(cb)`:
-  FLAC conversion, writing into `master.db` or the XML depending on what is open
+- `convertAudioPreview(data)` / `convertAudio(request)` / `cancelConvertAudio(id)` / `onConvertAudioProgress(cb)`:
+  FLAC, WAV and M4A conversion, writing into `master.db` or the XML depending on what is open
 - `autoHotCuePreview(request)` / `autoHotCueWrite(request)`: suggest hot cues from the phrase analysis (read on a
   copy), then write the ticked tracks' cues into `master.db`
 - `cleanupFlacPreview(data)` / `cleanupFlac(request)` / `onCleanupFlacProgress(cb)`: trash the FLACs a conversion
-  left behind (cancelled through `cancelConvertFlac`, which shares the table of runs in flight)
+  left behind (cancelled through `cancelConvertAudio`, which shares the table of runs in flight)
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with
   `dbKey`) / `removeEntriesInDb(data)`: the database-native writes, each requiring rekordbox to be closed
   and taking a backup first. `mergeDuplicatesInDb` with `deleteFromDisk` also trashes the removed copies'
@@ -423,7 +442,7 @@ src/renderer/
 │   │   ├── EmptyLibraryState.tsx  # The home screen: database first, XML below
 │   │   └── index.ts               # Barrel exports
 │   ├── maintenance/               # Unrelated tools, one per file
-│   │   ├── ConvertFlacPanel.tsx   # FLAC → AIFF / WAV / MP3 for older players
+│   │   ├── ConvertAudioPanel.tsx  # FLAC, WAV, M4A → AIFF / WAV / MP3 for older players
 │   │   ├── ConsolidatePanel.tsx   # Gather the library onto one drive
 │   │   ├── FilterMovePanel.tsx    # Move the part that matches some rules
 │   │   └── shared.tsx             # What both genuinely share

@@ -5,7 +5,7 @@ import { unlockDatabase } from './rekordboxDbParser';
 import { backupDatabaseFile } from './backupDatabase';
 import { isRekordboxRunning } from './rekordboxRunning';
 import { nextUsn } from './rekordboxDbRelocator';
-import type { ConversionFormat } from './flacConverter';
+import type { ConversionFormat } from './audioConverter';
 
 type Db = InstanceType<typeof Database>;
 
