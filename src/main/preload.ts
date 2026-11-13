@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   TrackPayload, ScanOptionsPayload, ScanProgressPayload, DuplicateSet, MergePlanPayload,
   RelocationPayload, RelocateProgressPayload, FilterRulePayload, OperationProgress,
-  ConversionFormatPayload, ConversionSourcePayload, ConvertAudioRequest, ConvertAudioProgress, FlacCleanupRequest, FlacCleanupProgress,
+  ConversionFormatPayload, ConversionSourcePayload, ConvertAudioRequest, ConvertAudioProgress, OriginalsCleanupRequest, OriginalsCleanupProgress,
   AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueProgress,
   UpdateDownloadProgress, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress,
   PlayHistoryRequest, NavidromeConnectionRequest, NavidromeImportRequest, NavidromeImportProgress,
@@ -165,13 +165,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('convert-audio-progress', handler);
     return () => { ipcRenderer.removeListener('convert-audio-progress', handler); };
   },
-  // The FLACs a conversion left behind. Cancelled through cancelConvertAudio.
-  cleanupFlacPreview: (data: { tracks: TrackPayload[] }) => ipcRenderer.invoke('cleanup-flac-preview', data),
-  cleanupFlac: (data: FlacCleanupRequest) => ipcRenderer.invoke('cleanup-flac', data),
-  onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => {
-    const handler = (_: Electron.IpcRendererEvent, progress: FlacCleanupProgress) => callback(progress);
-    ipcRenderer.on('cleanup-flac-progress', handler);
-    return () => { ipcRenderer.removeListener('cleanup-flac-progress', handler); };
+  // The originals a conversion left behind. Cancelled through cancelConvertAudio.
+  cleanupOriginalsPreview: (data: { tracks: TrackPayload[] }) => ipcRenderer.invoke('cleanup-originals-preview', data),
+  cleanupOriginals: (data: OriginalsCleanupRequest) => ipcRenderer.invoke('cleanup-originals', data),
+  onCleanupOriginalsProgress: (callback: (progress: OriginalsCleanupProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, progress: OriginalsCleanupProgress) => callback(progress);
+    ipcRenderer.on('cleanup-originals-progress', handler);
+    return () => { ipcRenderer.removeListener('cleanup-originals-progress', handler); };
   },
 
   // Auto hot cues from rekordbox's phrase analysis

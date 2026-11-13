@@ -1,14 +1,14 @@
 import type {
-  FlacCleanupProgress, FlacCleanupRequest, FlacCleanupSummary, IpcResult,
+  OriginalsCleanupProgress, OriginalsCleanupRequest, OriginalsCleanupSummary, IpcResult,
 } from '../../main/ipcContract';
 
 export interface CleanupSnapshot {
   running: boolean;
   libraryPath: string;
-  progress: FlacCleanupProgress | null;
+  progress: OriginalsCleanupProgress | null;
   operationId: string | null;
   /** The last finished run, kept until it is dismissed or another starts. */
-  summary: FlacCleanupSummary | null;
+  summary: OriginalsCleanupSummary | null;
   error: string | null;
 }
 
@@ -17,7 +17,7 @@ const EMPTY: CleanupSnapshot = {
 };
 
 /**
- * The FLAC cleanup, outside its panel for the reason `convertAudioSession`
+ * The cleanup of converted originals, outside its panel for the reason `convertAudioSession`
  * gives: decoding every pair takes minutes, and switching tabs meanwhile
  * unmounted the panel and lost the run's progress and result.
  */
@@ -41,19 +41,19 @@ export const resetCleanupSession = (): void => {
 };
 
 export async function startCleanup(
-  request: Omit<FlacCleanupRequest, 'operationId'>
-): Promise<IpcResult<FlacCleanupSummary>> {
+  request: Omit<OriginalsCleanupRequest, 'operationId'>
+): Promise<IpcResult<OriginalsCleanupSummary>> {
   if (state.running) { return { success: false, error: 'A cleanup is already running.' }; }
 
-  const operationId = `cleanup-flac-${Date.now()}`;
+  const operationId = `cleanup-originals-${Date.now()}`;
   emit({ ...EMPTY, running: true, libraryPath: request.libraryPath, operationId });
 
-  const stopProgress = window.electronAPI.onCleanupFlacProgress((p) => {
+  const stopProgress = window.electronAPI.onCleanupOriginalsProgress((p) => {
     if (p.operationId === operationId) { emit({ progress: p }); }
   });
 
   try {
-    const res = await window.electronAPI.cleanupFlac({ ...request, operationId });
+    const res = await window.electronAPI.cleanupOriginals({ ...request, operationId });
     emit(res.success && res.data ? { summary: res.data } : { error: res.error ?? 'Cleanup failed' });
     return res;
   } catch {

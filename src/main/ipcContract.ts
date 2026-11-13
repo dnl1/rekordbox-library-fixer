@@ -231,29 +231,31 @@ export interface ConvertAudioSummary {
   backupPath?: string;
 }
 
-/** FLACs left beside the AIFF or WAV the library now uses, before any is checked. */
-export interface FlacCleanupPreview {
+/** Originals — FLAC, WAV, M4A — left beside the AIFF or WAV the library now uses, before any is checked. */
+export interface OriginalsCleanupPreview {
   /** False when this build carries no ffmpeg, which the audio check needs. */
   available: boolean;
-  /** FLACs no entry uses, each beside a lossless file an entry does use. */
+  /** Originals no entry uses, each beside a lossless file an entry does use. */
   files: number;
+  /** Of `files`, how many of each kind. */
+  filesByKind: Record<ConversionSourcePayload, number>;
   totalSizeBytes: number;
-  /** FLACs beside a conversion that an entry still points at — Convert's to settle. */
+  /** Originals beside a conversion that an entry still points at — Convert's to settle. */
   stillUsed: number;
 }
 
-export interface FlacCleanupRequest {
+export interface OriginalsCleanupRequest {
   operationId: string;
-  /** The whole library: a FLAC any entry points at is never a candidate. */
+  /** The whole library: an original any entry points at is never a candidate. */
   tracks: TrackPayload[];
   /** A master.db only: an XML library says nothing about what rekordbox itself uses. */
   libraryPath: string;
   dbKey: string;
-  /** How many FLACs are compared with their conversion at once. */
+  /** How many originals are compared with their conversion at once. */
   workers?: number;
 }
 
-export interface FlacCleanupProgress {
+export interface OriginalsCleanupProgress {
   operationId: string;
   current: number;
   total: number;
@@ -262,7 +264,7 @@ export interface FlacCleanupProgress {
   currentFile: string;
 }
 
-export interface FlacCleanupSummary {
+export interface OriginalsCleanupSummary {
   trashed: string[];
   freedBytes: number;
   kept: Array<{ file: string; reason: string }>;

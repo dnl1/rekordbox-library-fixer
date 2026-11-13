@@ -11,11 +11,11 @@ import { backupDatabaseFile } from '../backupDatabase';
 import { assertWritableLibraryPath, isRekordboxDatabasePath } from '../librarySource';
 import { isRekordboxRunning } from '../rekordboxRunning';
 import { hostEnvironment, toHostPath } from '../hostPath';
-import { planFlacCleanup, cleanupFlacs } from '../flacCleanup';
+import { planOriginalsCleanup, trashConvertedOriginals } from '../originalsCleanup';
 import { parseDb } from '../rekordboxDbParser';
 import type {
   TrackPayload, ConvertAudioPreview, ConvertAudioRequest, ConvertAudioSummary, IpcResult,
-  FlacCleanupPreview, FlacCleanupRequest, FlacCleanupSummary,
+  OriginalsCleanupPreview, OriginalsCleanupRequest, OriginalsCleanupSummary,
 } from '../ipcContract';
 
 /** Runs in flight — conversions and cleanups — so a cancel request can reach the one it names. */
@@ -241,27 +241,33 @@ export function registerConversionIpc(): void {
     return { success: true };
   });
 
-  registerFlacCleanupIpc();
+  registerOriginalsCleanupIpc();
 }
 
 /**
- * Trashing the FLACs a conversion left behind. Only for rekordbox's database:
- * an XML library pointing at an AIFF says nothing about rekordbox's own
- * collection, which may still point at the FLAC — the same reason Convert
+ * Trashing the originals a conversion left behind — FLAC, WAV, M4A. Only for
+ * rekordbox's database: an XML library pointing at an AIFF says nothing about
+ * rekordbox's own collection, which may still point at the original — the same reason Convert
  * trashes originals for a database only. Nothing is written into the
  * database, so rekordbox may stay open; what it points at is re-read before
  * anything goes.
  */
-function registerFlacCleanupIpc(): void {
-  ipcMain.handle('cleanup-flac-preview', async (_e, { tracks }: { tracks: TrackPayload[] }): Promise<IpcResult<FlacCleanupPreview>> => {
+function registerOriginalsCleanupIpc(): void {
+  ipcMain.handle('cleanup-originals-preview', async (_e, { tracks }: { tracks: TrackPayload[] }): Promise<IpcResult<OriginalsCleanupPreview>> => {
     try {
-      const plan = planFlacCleanup(onThisDisk(tracks).hostTracks);
+      const plan = planOriginalsCleanup(onThisDisk(tracks).hostTracks);
+      const filesByKind = Object.fromEntries(SOURCE_KINDS.map((k) => [k, 0])) as Record<SourceKind, number>;
+      for (const candidate of plan.candidates) {
+        const kind = sourceKind(candidate.original);
+        if (kind) { filesByKind[kind]++; }
+      }
       return {
         success: true,
         data: {
           available: ffmpegPath() !== null,
           files: plan.candidates.length,
-          totalSizeBytes: plan.candidates.reduce((sum, c) => sum + fileSize(c.flac), 0),
+          filesByKind,
+          totalSizeBytes: plan.candidates.reduce((sum, c) => sum + fileSize(c.original), 0),
           stillUsed: plan.stillUsed,
         },
       };
@@ -270,7 +276,7 @@ function registerFlacCleanupIpc(): void {
     }
   });
 
-  ipcMain.handle('cleanup-flac', async (event, request: FlacCleanupRequest): Promise<IpcResult<FlacCleanupSummary>> => {
+  ipcMain.handle('cleanup-originals', async (event, request: OriginalsCleanupRequest): Promise<IpcResult<OriginalsCleanupSummary>> => {
     const { operationId, tracks, libraryPath, dbKey, workers } = request;
     const ffmpeg = ffmpegPath();
     if (!ffmpeg) {
@@ -286,17 +292,17 @@ function registerFlacCleanupIpc(): void {
     try {
       const disk = onThisDisk(tracks);
       const converter = new AudioConverter(ffmpeg);
-      const outcome = await cleanupFlacs(
-        planFlacCleanup(disk.hostTracks),
+      const outcome = await trashConvertedOriginals(
+        planOriginalsCleanup(disk.hostTracks),
         {
-          sameAudio: (flac, converted, token) => converter.sameAudio(flac, converted, token),
+          sameAudio: (original, converted, token) => converter.sameAudio(original, converted, token),
           currentLocations: async () => {
             const library = await parseDb(libraryPath, dbKey);
             return [...library.tracks.values()].map((t) => disk.toHost(t.location));
           },
           trash: (file) => shell.trashItem(file),
         },
-        (progress) => { event.sender.send('cleanup-flac-progress', { operationId, ...progress }); },
+        (progress) => { event.sender.send('cleanup-originals-progress', { operationId, ...progress }); },
         cancelToken,
         workers
       );

@@ -1,7 +1,7 @@
 // Global types and interfaces
 import type {
   IpcResult, RecoveredDbKey, ConversionFormatPayload, ConversionSourcePayload, ConvertAudioPreview, ConvertAudioRequest, ConvertAudioProgress, ConvertAudioSummary,
-  FlacCleanupPreview, FlacCleanupRequest, FlacCleanupProgress, FlacCleanupSummary,
+  OriginalsCleanupPreview, OriginalsCleanupRequest, OriginalsCleanupProgress, OriginalsCleanupSummary,
   AutoHotCuePreview, AutoHotCuePreviewRequest, AutoHotCueWriteRequest, AutoHotCueWriteSummary, AutoHotCueProgress,
   UpdateCheckResult, UpdateDownloadProgress, UpdateInstallResult,
   PlaylistZipPreview, PlaylistZipPreviewRequest, PlaylistZipRequest, PlaylistZipProgress, PlaylistZipSummary,
@@ -269,9 +269,9 @@ declare global {
       convertAudio: (data: ConvertAudioRequest) => Promise<IpcResult<ConvertAudioSummary>>;
       cancelConvertAudio: (operationId: string) => Promise<{ success: boolean }>;
       onConvertAudioProgress: (callback: (progress: ConvertAudioProgress) => void) => () => void;
-      cleanupFlacPreview: (data: { tracks: any[] }) => Promise<IpcResult<FlacCleanupPreview>>;
-      cleanupFlac: (data: FlacCleanupRequest) => Promise<IpcResult<FlacCleanupSummary>>;
-      onCleanupFlacProgress: (callback: (progress: FlacCleanupProgress) => void) => () => void;
+      cleanupOriginalsPreview: (data: { tracks: any[] }) => Promise<IpcResult<OriginalsCleanupPreview>>;
+      cleanupOriginals: (data: OriginalsCleanupRequest) => Promise<IpcResult<OriginalsCleanupSummary>>;
+      onCleanupOriginalsProgress: (callback: (progress: OriginalsCleanupProgress) => void) => () => void;
       // Auto hot cues
       autoHotCuePreview: (data: AutoHotCuePreviewRequest) => Promise<IpcResult<AutoHotCuePreview>>;
       autoHotCueWrite: (data: AutoHotCueWriteRequest) => Promise<IpcResult<AutoHotCueWriteSummary>>;

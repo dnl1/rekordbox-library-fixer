@@ -128,13 +128,16 @@ collection has to go through the database.
   (`locationsStillUsed`). The run lives in `src/renderer/conversion/convertAudioSession.ts`, not
   the panel: the library reload after a write replaces the whole page with a spinner, which unmounted the
   panel at the moment its result arrived.
-- **Cleaning up converted FLACs** (`src/main/flacCleanup.ts`, `components/maintenance/CleanupFlacPanel.tsx`,
-  `conversion/flacCleanupSession.ts`): trashes a `Track.flac` left beside the `Track.aiff`/`.wav` the library uses.
-  It goes only when no entry points at the FLAC, an entry points at the conversion, and the two decode to the same
-  audio (`AudioConverter.sameAudio`: rate, channels, length, and the MD5 of the PCM widened to 32 bits, so a 16-bit
-  FLAC matches a 24-bit AIFF another tool made). `master.db` only — an XML library does not say what rekordbox
-  itself uses. Nothing is written into the database; its locations are re-read (`parseDb`, on a copy) after the
-  checks and before the trash, and a cancelled run trashes nothing. A FLAC an entry still uses is Convert's job.
+- **Cleaning up converted originals** (`src/main/originalsCleanup.ts`, `components/maintenance/CleanupOriginalsPanel.tsx`,
+  `conversion/originalsCleanupSession.ts`): trashes a `Track.flac`, `Track.wav` or `Track.m4a` left beside the
+  `Track.aiff`/`.wav` the library uses (`originalsBeside`; a WAV is never its own original). It goes only when no entry
+  points at it, an entry points at the conversion, and the two decode to the same audio (`AudioConverter.sameAudio`).
+  From a lossless original: rate, channels, exact length, and the MD5 of the PCM widened to 32 bits, so a 16-bit FLAC
+  matches a 24-bit AIFF another tool made while an AIFF that dropped bits does not. From AAC, which decodes to floating
+  point: length within 0.1 s, and the MD5 at the converted file's depth (16, 24 or 32), which is what the conversion
+  rounded it to. `master.db` only — an XML library does not say what rekordbox itself uses. Nothing is written into
+  the database; its locations are re-read (`parseDb`, on a copy) after the checks and before the trash, and a
+  cancelled run trashes nothing. An original an entry still uses is Convert's job.
 - **Auto hot cues** (`src/main/anlzReader.ts`, `autoHotCue.ts`, `rekordboxDbHotCues.ts`, `ipc/hotCues.ts`,
   `components/maintenance/AutoHotCuePanel.tsx`): hot cues from rekordbox's own phrase analysis, for tracks with no
   hot cue at all (memory cues do not count and are kept). `anlzReader` reads `PQTZ` and `PSSI` out of the ANLZ
@@ -150,7 +153,7 @@ collection has to go through the database.
   no hot cue, with rekordbox closed and a backup first. No colours yet: how `Color`/`ColorTableIndex` map to
   rekordbox's hot cue palette is not verified, so cues are written uncoloured (`Color` -1).
 - **Workers** (`src/main/workerPool.ts`, `components/settings/WorkersPanel.tsx`): Convert audio, Clean up converted
-  FLACs, Auto hot cues and a Navidrome import's AIFF conversion work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
+  originals, Auto hot cues and a Navidrome import's AIFF conversion work on `workers` files at once (settings store, default 4, 1–8), each its own ffmpeg.
   `runPool` reports how many are busy, and every run's progress shows it. On a real library, 1332 tracks' bass
   analysis took 6.5 minutes with four.
 - **Navidrome import options** (`components/navidrome/NavidromeImportModal.tsx`, `navidrome/importRun.ts`,
@@ -370,7 +373,7 @@ exposed through `window.electronAPI`:
   FLAC, WAV and M4A conversion, writing into `master.db` or the XML depending on what is open
 - `autoHotCuePreview(request)` / `autoHotCueWrite(request)`: suggest hot cues from the phrase analysis (read on a
   copy), then write the ticked tracks' cues into `master.db`
-- `cleanupFlacPreview(data)` / `cleanupFlac(request)` / `onCleanupFlacProgress(cb)`: trash the FLACs a conversion
+- `cleanupOriginalsPreview(data)` / `cleanupOriginals(request)` / `onCleanupOriginalsProgress(cb)`: trash the originals a conversion
   left behind (cancelled through `cancelConvertAudio`, which shares the table of runs in flight)
 - `mergeDuplicatesInDb(data)` / `relocateTracksInDb` (via `batchRelocateTracks`/`autoRelocateTracks` with
   `dbKey`) / `removeEntriesInDb(data)`: the database-native writes, each requiring rekordbox to be closed

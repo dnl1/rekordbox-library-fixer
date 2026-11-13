@@ -5,24 +5,33 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { formatFileSize } from '../../utils';
 import {
   subscribeCleanup, getCleanupSnapshot, startCleanup, cancelCleanup, resetCleanupSession,
-} from '../../conversion/flacCleanupSession';
-import type { FlacCleanupPreview } from '../../../main/ipcContract';
+} from '../../conversion/originalsCleanupSession';
+import type { ConversionSourcePayload, OriginalsCleanupPreview } from '../../../main/ipcContract';
 import { ActiveWorkers } from './shared';
 
 type Phase = 'idle' | 'previewing' | 'previewed' | 'confirming' | 'running' | 'done';
 
+const KINDS: Array<[ConversionSourcePayload, string]> = [['flac', 'FLAC'], ['wav', 'WAV'], ['m4a', 'M4A']];
+
+/** "3 FLAC, 1 M4A" — only the kinds there are. */
+const byKind = (preview: OriginalsCleanupPreview): string =>
+  KINDS.filter(([kind]) => (preview.filesByKind?.[kind] ?? 0) > 0)
+    .map(([kind, label]) => `${preview.filesByKind[kind]} ${label}`)
+    .join(', ');
+
 /**
- * Trash the FLACs a conversion left behind: no entry uses them, an entry uses
- * the AIFF or WAV beside them, and the two decode to the same audio. The rules
- * live in `src/main/flacCleanup.ts`; the run in `flacCleanupSession`.
+ * Trash the originals a conversion left behind — FLAC, WAV, M4A: no entry
+ * uses them, an entry uses the AIFF or WAV beside them, and the two decode to
+ * the same audio. The rules live in `src/main/originalsCleanup.ts`; the run in
+ * `originalsCleanupSession`.
  */
-export const CleanupFlacPanel: React.FC = () => {
+export const CleanupOriginalsPanel: React.FC = () => {
   const { libraryData, libraryPath, showNotification } = useAppContext();
   const session = useSyncExternalStore(subscribeCleanup, getCleanupSnapshot);
   const mine = session.libraryPath === libraryPath;
 
   const [localPhase, setLocalPhase] = useState<Phase>('idle');
-  const [preview, setPreview] = useState<FlacCleanupPreview | null>(null);
+  const [preview, setPreview] = useState<OriginalsCleanupPreview | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const running = mine && session.running;
@@ -43,7 +52,7 @@ export const CleanupFlacPanel: React.FC = () => {
     resetCleanupSession();
     setLocalPhase('previewing');
     setLocalError(null);
-    const res = await window.electronAPI.cleanupFlacPreview({ tracks });
+    const res = await window.electronAPI.cleanupOriginalsPreview({ tracks });
     if (res.success && res.data) {
       setPreview(res.data);
       setLocalPhase(res.data.available && res.data.files > 0 ? 'confirming' : 'previewed');
@@ -70,7 +79,7 @@ export const CleanupFlacPanel: React.FC = () => {
     showNotification(
       s.failed.length > 0 ? 'warning' : 'success',
       `${s.cancelled ? 'Cancelled — nothing was trashed. ' : ''}`
-      + `Moved ${s.trashed.length} FLAC${s.trashed.length === 1 ? '' : 's'} to the trash, freeing ${formatFileSize(s.freedBytes)}.`
+      + `Moved ${s.trashed.length} original${s.trashed.length === 1 ? '' : 's'} to the trash, freeing ${formatFileSize(s.freedBytes)}.`
       + `${s.kept.length > 0 ? ` ${s.kept.length} kept.` : ''}`
       + `${s.failed.length > 0 ? ` ${s.failed.length} failed.` : ''}`,
       { important: true }
@@ -81,10 +90,10 @@ export const CleanupFlacPanel: React.FC = () => {
 
   return (
     <div className="bg-white rounded-te shadow-sm p-te-md mt-te-md">
-      <h3 className="font-semibold text-te-grey-800 mb-1">Clean up converted FLACs</h3>
+      <h3 className="font-semibold text-te-grey-800 mb-1">Clean up converted originals</h3>
       <p className="text-sm text-te-grey-500 font-te-mono mb-te-md">
-        Moves to the trash each FLAC that no entry uses any more, when the AIFF or WAV beside it is in the
-        library and decodes to exactly the same audio.
+        Moves to the trash each FLAC, WAV or M4A that no entry uses any more, when the AIFF or WAV beside it
+        is in the library and decodes to exactly the same audio.
       </p>
 
       {!libraryData ? (
@@ -92,7 +101,7 @@ export const CleanupFlacPanel: React.FC = () => {
       ) : !isDatabase ? (
         <p className="text-xs font-te-mono text-te-grey-500">
           Only for rekordbox&apos;s own database: an XML library does not say which files rekordbox itself
-          still uses, and its collection may still point at the FLACs.
+          still uses, and its collection may still point at the originals.
         </p>
       ) : (
         <div className="space-y-te-md">
@@ -103,7 +112,8 @@ export const CleanupFlacPanel: React.FC = () => {
               ) : (
                 <>
                   <div>
-                    {preview.files} FLAC file{preview.files === 1 ? '' : 's'} beside a conversion no entry uses
+                    {preview.files} original{preview.files === 1 ? '' : 's'} beside a conversion no entry uses
+                    {byKind(preview) ? ` (${byKind(preview)})` : ''}
                     {' '}— {formatFileSize(preview.totalSizeBytes)}
                   </div>
                   {preview.files === 0 && <div className="text-te-grey-600">Nothing to clean up.</div>}
@@ -120,8 +130,9 @@ export const CleanupFlacPanel: React.FC = () => {
 
           {phase === 'confirming' && (
             <p className="text-xs font-te-mono text-te-grey-700">
-              Each FLAC is decoded and compared with its AIFF or WAV first; only an exact match goes, and only
-              to the trash. What rekordbox points at is read again just before, so rekordbox may stay open.
+              Each original is decoded and compared with its AIFF or WAV first; only an exact match goes, and
+              only to the trash. An AAC M4A is compared at the depth its AIFF holds, since AAC decodes to more
+              precision than any PCM file keeps. What rekordbox points at is read again just before, so rekordbox may stay open.
               Nothing is written into the database.
             </p>
           )}
@@ -173,7 +184,7 @@ export const CleanupFlacPanel: React.FC = () => {
             ) : phase === 'confirming' ? (
               <>
                 <button onClick={runCleanup} className="btn-primary flex items-center gap-2">
-                  <Trash2 className="w-4 h-4" /> Check and trash {preview?.files} FLACs
+                  <Trash2 className="w-4 h-4" /> Check and trash {preview?.files} originals
                 </button>
                 <button onClick={reset} className="btn-ghost">Back</button>
               </>
@@ -184,7 +195,7 @@ export const CleanupFlacPanel: React.FC = () => {
                   disabled={phase === 'previewing'}
                   className="btn-secondary flex items-center gap-2 disabled:opacity-40"
                 >
-                  {phase === 'previewing' ? 'Checking…' : 'Find leftover FLACs'}
+                  {phase === 'previewing' ? 'Checking…' : 'Find leftover originals'}
                 </button>
                 {phase === 'done' && <button onClick={reset} className="btn-secondary">Reset</button>}
               </>

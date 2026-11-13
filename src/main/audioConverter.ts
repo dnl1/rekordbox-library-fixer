@@ -589,25 +589,47 @@ export class AudioConverter {
   }
 
   /**
-   * Why two files are not the same recording, or null when they are: same
-   * rate, channels and length, and the decoded audio hashing the same.
+   * Why a converted file is not the same recording as its original, or null
+   * when it is.
    *
-   * Looser than `provesIdentical` on purpose. That one asks whether a file is
-   * what this app would have written; this asks only whether the audio is the
+   * From a lossless original — FLAC, WAV, ALAC — the rate, channels and length
+   * must match and the decoded audio hash the same widened to 32 bits. Looser
+   * than `provesIdentical` on purpose: that one asks whether a file is what
+   * this app would have written; this asks only whether the samples are the
    * same, so a 16-bit FLAC someone else converted to a 24-bit AIFF still
-   * matches — the widened hash compares the samples, not their container.
+   * matches, while an AIFF that dropped bits from a 24-bit FLAC does not.
+   *
+   * AAC decodes to floating point, which no PCM file holds as it is: the
+   * conversion rounded it to the file's depth. So from AAC the audio is decoded
+   * at the converted file's depth, 16 bits at least, and must hash the same
+   * there; its length, which the container only estimates, is held to the
+   * conversion's tolerance first.
    */
-  async sameAudio(a: string, b: string, cancelToken: CancelToken): Promise<string | null> {
+  async sameAudio(original: string, converted: string, cancelToken: CancelToken): Promise<string | null> {
     let first: AudioShape;
     let second: AudioShape;
-    try { first = await probeAudio(a); } catch { return `${path.basename(a)} cannot be read`; }
-    try { second = await probeAudio(b); } catch { return `${path.basename(b)} cannot be read`; }
+    try { first = await this.probeSource(original); } catch { return `${path.basename(original)} cannot be read`; }
+    try { second = await probeAudio(converted); } catch { return `${path.basename(converted)} cannot be read`; }
     if (first.sampleRate !== second.sampleRate) { return `sample rate ${first.sampleRate} vs ${second.sampleRate}`; }
     if (first.channels !== second.channels) { return `${first.channels} vs ${second.channels} channels`; }
-    if (first.samples > 0 && second.samples > 0 && first.samples !== second.samples) {
-      return `length ${first.samples} vs ${second.samples} samples`;
+
+    let bits = 32;
+    if (first.lossless) {
+      if (first.samples > 0 && second.samples > 0 && first.samples !== second.samples) {
+        return `length ${first.samples} vs ${second.samples} samples`;
+      }
+    } else {
+      if (![16, 24, 32].includes(second.bitsPerSample)) {
+        return `${path.basename(converted)} is ${second.bitsPerSample}-bit`;
+      }
+      const before = first.samples / first.sampleRate;
+      const after = second.samples / second.sampleRate;
+      if (first.samples > 0 && second.samples > 0 && Math.abs(after - before) > LOSSY_LENGTH_TOLERANCE_SECONDS) {
+        return `length ${before.toFixed(2)} s vs ${after.toFixed(2)} s`;
+      }
+      bits = second.bitsPerSample;
     }
-    const [x, y] = [await this.pcmDigest(a, cancelToken), await this.pcmDigest(b, cancelToken)];
+    const [x, y] = [await this.pcmDigest(original, cancelToken, bits), await this.pcmDigest(converted, cancelToken, bits)];
     return x === y ? null : 'the audio differs';
   }
 

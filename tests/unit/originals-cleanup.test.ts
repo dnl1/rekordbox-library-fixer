@@ -5,38 +5,46 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { planFlacCleanup, flacBeside, cleanupFlacs, type CleanupDeps } from '../../src/main/flacCleanup';
-import { AudioConverter } from '../../src/main/audioConverter';
+import { planOriginalsCleanup, originalsBeside, trashConvertedOriginals, type CleanupDeps } from '../../src/main/originalsCleanup';
+import { AudioConverter, planConversions } from '../../src/main/audioConverter';
 import { resolveFfmpegPath } from '../../src/main/ffmpegBinary';
 
 const on = (...files: string[]) => (p: string) => files.includes(p);
 
-describe('flacBeside', () => {
+describe('originalsBeside', () => {
   it('finds the FLAC beside an AIFF, an AIF or a WAV', () => {
-    expect(flacBeside('/m/a.aiff', on('/m/a.flac'))).toBe('/m/a.flac');
-    expect(flacBeside('/m/a.AIF', on('/m/a.flac'))).toBe('/m/a.flac');
-    expect(flacBeside('/m/a.wav', on('/m/a.FLAC'))).toBe('/m/a.FLAC');
+    expect(originalsBeside('/m/a.aiff', on('/m/a.flac'))).toEqual(['/m/a.flac']);
+    expect(originalsBeside('/m/a.AIF', on('/m/a.flac'))).toEqual(['/m/a.flac']);
+    expect(originalsBeside('/m/a.wav', on('/m/a.FLAC'))).toEqual(['/m/a.FLAC']);
+  });
+
+  it('finds a WAV and an M4A beside an AIFF too, each of them', () => {
+    expect(originalsBeside('/m/a.aiff', on('/m/a.flac', '/m/a.wav', '/m/a.M4A'))).toEqual(['/m/a.flac', '/m/a.wav', '/m/a.M4A']);
+  });
+
+  it('never calls a WAV its own original', () => {
+    expect(originalsBeside('/m/a.wav', on('/m/a.wav', '/m/a.m4a'))).toEqual(['/m/a.m4a']);
   });
 
   it('never treats an MP3 as a replacement — it is lossy', () => {
-    expect(flacBeside('/m/a.mp3', on('/m/a.flac'))).toBeNull();
+    expect(originalsBeside('/m/a.mp3', on('/m/a.flac'))).toEqual([]);
   });
 
   it('keeps the library spelling of a Windows path', () => {
-    expect(flacBeside('C:/Music/a.aiff', on('C:/Music/a.flac'))).toBe('C:/Music/a.flac');
+    expect(originalsBeside('C:/Music/a.aiff', on('C:/Music/a.flac'))).toEqual(['C:/Music/a.flac']);
   });
 });
 
-describe('planFlacCleanup', () => {
+describe('planOriginalsCleanup', () => {
   const exists = on('/m/a.aiff', '/m/a.flac', '/m/b.aiff', '/m/b.flac', '/m/c.flac');
 
   it('offers a FLAC no entry uses, beside an AIFF one does', () => {
-    const plan = planFlacCleanup([{ id: '1', location: '/m/a.aiff' }], exists);
-    expect(plan.candidates).toEqual([{ flac: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1'] }]);
+    const plan = planOriginalsCleanup([{ id: '1', location: '/m/a.aiff' }], exists);
+    expect(plan.candidates).toEqual([{ original: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1'] }]);
   });
 
   it('never offers a FLAC an entry still points at', () => {
-    const plan = planFlacCleanup([
+    const plan = planOriginalsCleanup([
       { id: '1', location: '/m/b.aiff' },
       { id: '2', location: '/m/b.flac' },
     ], exists);
@@ -46,7 +54,7 @@ describe('planFlacCleanup', () => {
 
   it('sees an entry for the FLAC however its accents or case are spelled', () => {
     const decomposed = '/m/Cafe\u0301.aiff';
-    const plan = planFlacCleanup([
+    const plan = planOriginalsCleanup([
       { id: '1', location: decomposed },
       { id: '2', location: '/M/CAF\u00c9.FLAC' },
     ], on(decomposed, '/m/Cafe\u0301.flac'));
@@ -54,28 +62,41 @@ describe('planFlacCleanup', () => {
   });
 
   it('ignores a FLAC with no conversion beside it, and a conversion whose file is gone', () => {
-    expect(planFlacCleanup([{ id: '1', location: '/m/c.flac' }], exists).candidates).toEqual([]);
-    expect(planFlacCleanup([{ id: '1', location: '/m/gone.aiff' }], on('/m/gone.flac')).candidates).toEqual([]);
+    expect(planOriginalsCleanup([{ id: '1', location: '/m/c.flac' }], exists).candidates).toEqual([]);
+    expect(planOriginalsCleanup([{ id: '1', location: '/m/gone.aiff' }], on('/m/gone.flac')).candidates).toEqual([]);
   });
 
   it('lists a FLAC once when several entries use its conversion', () => {
-    const plan = planFlacCleanup([
+    const plan = planOriginalsCleanup([
       { id: '1', location: '/m/a.aiff' },
       { id: '2', location: '/m/a.aiff' },
     ], exists);
-    expect(plan.candidates).toEqual([{ flac: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1', '2'] }]);
+    expect(plan.candidates).toEqual([{ original: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1', '2'] }]);
+  });
+
+  it('offers a WAV and an M4A left beside an AIFF, and leaves a WAV an entry still uses to Convert', () => {
+    const plan = planOriginalsCleanup([
+      { id: '1', location: '/m/a.aiff' },
+      { id: '2', location: '/m/b.aiff' },
+      { id: '3', location: '/m/b.wav' },
+    ], on('/m/a.aiff', '/m/a.wav', '/m/a.m4a', '/m/b.aiff', '/m/b.wav'));
+    expect(plan.candidates).toEqual([
+      { original: '/m/a.wav', converted: '/m/a.aiff', trackIds: ['1'] },
+      { original: '/m/a.m4a', converted: '/m/a.aiff', trackIds: ['1'] },
+    ]);
+    expect(plan.stillUsed).toBe(1);
   });
 
   it('leaves streaming entries alone', () => {
-    expect(planFlacCleanup([{ id: '1', location: 'tidal:tracks:1' }], () => true).candidates).toEqual([]);
+    expect(planOriginalsCleanup([{ id: '1', location: 'tidal:tracks:1' }], () => true).candidates).toEqual([]);
   });
 });
 
-describe('cleanupFlacs', () => {
+describe('trashConvertedOriginals', () => {
   const plan = {
     candidates: [
-      { flac: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1'] },
-      { flac: '/m/b.flac', converted: '/m/b.aiff', trackIds: ['2'] },
+      { original: '/m/a.flac', converted: '/m/a.aiff', trackIds: ['1'] },
+      { original: '/m/b.flac', converted: '/m/b.aiff', trackIds: ['2'] },
     ],
     stillUsed: 0,
   };
@@ -89,29 +110,29 @@ describe('cleanupFlacs', () => {
 
   it('trashes each FLAC proved identical and counts what it frees', async () => {
     const d = deps();
-    const out = await cleanupFlacs(plan, d, () => {}, { cancelled: false });
+    const out = await trashConvertedOriginals(plan, d, () => {}, { cancelled: false });
     expect(out.trashed).toEqual(['/m/a.flac', '/m/b.flac']);
     expect(out.freedBytes).toBe(200);
     expect(d.trash).toHaveBeenCalledTimes(2);
   });
 
   it('keeps a FLAC whose audio differs from the file beside it', async () => {
-    const d = deps({ sameAudio: async (flac) => (flac === '/m/b.flac' ? 'the audio differs' : null) });
-    const out = await cleanupFlacs(plan, d, () => {}, { cancelled: false });
+    const d = deps({ sameAudio: async (original) => (original === '/m/b.flac' ? 'the audio differs' : null) });
+    const out = await trashConvertedOriginals(plan, d, () => {}, { cancelled: false });
     expect(out.trashed).toEqual(['/m/a.flac']);
     expect(out.kept[0]).toMatchObject({ file: '/m/b.flac', reason: expect.stringMatching(/the audio differs/) });
   });
 
   it('re-reads the collection and keeps a FLAC an entry was pointed at meanwhile', async () => {
     const d = deps({ currentLocations: async () => ['/m/a.aiff', '/m/b.aiff', '/m/b.flac'] });
-    const out = await cleanupFlacs(plan, d, () => {}, { cancelled: false });
+    const out = await trashConvertedOriginals(plan, d, () => {}, { cancelled: false });
     expect(out.trashed).toEqual(['/m/a.flac']);
     expect(out.kept).toEqual([{ file: '/m/b.flac', reason: 'an entry points at it now' }]);
   });
 
   it('keeps a FLAC whose conversion no entry uses any more — it may be the only copy in the library', async () => {
     const d = deps({ currentLocations: async () => ['/m/a.aiff'] });
-    const out = await cleanupFlacs(plan, d, () => {}, { cancelled: false });
+    const out = await trashConvertedOriginals(plan, d, () => {}, { cancelled: false });
     expect(out.trashed).toEqual(['/m/a.flac']);
     expect(out.kept[0].file).toBe('/m/b.flac');
   });
@@ -119,14 +140,14 @@ describe('cleanupFlacs', () => {
   it('trashes nothing once cancelled, not even what it already proved', async () => {
     const token = { cancelled: false };
     const d = deps({ sameAudio: async () => { token.cancelled = true; return null; } });
-    const out = await cleanupFlacs(plan, d, () => {}, token);
+    const out = await trashConvertedOriginals(plan, d, () => {}, token);
     expect(out.cancelled).toBe(true);
     expect(d.trash).not.toHaveBeenCalled();
   });
 
   it('reports a file the trash refused and carries on', async () => {
     const d = deps({ trash: vi.fn(async (f: string) => { if (f === '/m/a.flac') { throw new Error('locked'); } }) });
-    const out = await cleanupFlacs(plan, d, () => {}, { cancelled: false });
+    const out = await trashConvertedOriginals(plan, d, () => {}, { cancelled: false });
     expect(out.failed).toEqual([{ file: '/m/a.flac', error: 'locked' }]);
     expect(out.trashed).toEqual(['/m/b.flac']);
     expect(out.freedBytes).toBe(100);
@@ -150,11 +171,16 @@ describe.skipIf(!ffmpeg)('AudioConverter.sameAudio with the bundled ffmpeg', () 
     run(['-f', 'lavfi', '-i', `sine=frequency=${freq}:duration=1:sample_rate=44100`, '-ac', '2', ...codec, out]);
 
   beforeAll(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flaccleanup-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'originalscleanup-'));
     tone(440, path.join(dir, 'a.flac'), ['-c:a', 'flac', '-sample_fmt', 's16']);
     run(['-i', path.join(dir, 'a.flac'), '-c:a', 'pcm_s16be', path.join(dir, 'a.aiff')]);
     run(['-i', path.join(dir, 'a.flac'), '-c:a', 'pcm_s24be', path.join(dir, 'a24.aiff')]);
     tone(880, path.join(dir, 'b.aiff'), ['-c:a', 'pcm_s16be']);
+    tone(440, path.join(dir, 'w24.wav'), ['-c:a', 'pcm_s24le']);
+    run(['-i', path.join(dir, 'w24.wav'), '-c:a', 'pcm_s16be', path.join(dir, 'w16.aiff')]);
+    tone(440, path.join(dir, 'alac.m4a'), ['-c:a', 'alac', '-sample_fmt', 's16p']);
+    run(['-i', path.join(dir, 'alac.m4a'), '-c:a', 'pcm_s16be', path.join(dir, 'alac.aiff')]);
+    tone(440, path.join(dir, 'aac.m4a'), ['-c:a', 'aac', '-b:a', '256k']);
   });
 
   afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
@@ -167,6 +193,32 @@ describe.skipIf(!ffmpeg)('AudioConverter.sameAudio with the bundled ffmpeg', () 
 
   it('matches a 16-bit FLAC with a 24-bit AIFF another tool made of it', async () => {
     expect(await converter().sameAudio(path.join(dir, 'a.flac'), path.join(dir, 'a24.aiff'), { cancelled: false })).toBeNull();
+  });
+
+  it('matches a WAV with its AIFF, but not with one that dropped bits', async () => {
+    const wav = path.join(dir, 'w24.wav');
+    const exact = path.join(dir, 'w24.aiff');
+    run(['-i', wav, '-c:a', 'pcm_s24be', exact]);
+    expect(await converter().sameAudio(wav, exact, { cancelled: false })).toBeNull();
+    // The WAV holds 24 bits the 16-bit AIFF lost: it is the better copy.
+    expect(await converter().sameAudio(wav, path.join(dir, 'w16.aiff'), { cancelled: false })).toBe('the audio differs');
+  });
+
+  it('matches an ALAC M4A with its AIFF', async () => {
+    expect(await converter().sameAudio(path.join(dir, 'alac.m4a'), path.join(dir, 'alac.aiff'), { cancelled: false })).toBeNull();
+  });
+
+  it('matches an AAC M4A with the AIFF Convert audio made of it', async () => {
+    const aac = path.join(dir, 'aac.m4a');
+    const result = await converter().convert(planConversions([{ id: 'x', location: aac }], 'aiff'), 'aiff', () => {}, { cancelled: false });
+    expect(result.failed).toEqual([]);
+    expect(await converter().sameAudio(aac, result.converted[0].newLocation, { cancelled: false })).toBeNull();
+  });
+
+  it('tells an AAC M4A apart from an AIFF of another recording', async () => {
+    const other = path.join(dir, 'other-aac.aiff');
+    tone(880, other, ['-c:a', 'pcm_s16be']);
+    expect(await converter().sameAudio(path.join(dir, 'aac.m4a'), other, { cancelled: false })).toBe('the audio differs');
   });
 
   it('tells apart two recordings of the same length and shape', async () => {
