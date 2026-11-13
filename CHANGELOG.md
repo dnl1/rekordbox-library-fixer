@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0-beta.10] - 2026-11-13
+
+### 🎉 New Features
+- **Convert audio**: Maintenance's Convert FLAC is now Convert audio, and it converts WAV and M4A files as well as FLAC, to AIFF, WAV or MP3 320 kbps. Checkboxes pick which kinds to convert, and a file already in the target format stays as it is. An M4A holds either ALAC, which converts sample-exact like FLAC and WAV, or AAC, which is already lossy: its AIFF or WAV sounds the same, only bigger, and its length is checked to a tenth of a second instead of to the sample. When `Track.flac` and `Track.wav` would both become `Track.aiff`, one is converted and the other is left for the next run, which checks it against that AIFF.
+- **A Navidrome import asks first**: "Import into rekordbox" opens a dialog with two options, ticked as you left them last time. Convert to AIFF turns the FLAC, WAV and M4A files into AIFF before anything is written, so rekordbox gets the AIFF; MP3 and AIFF files come in as they are, and each original the import downloaded is removed once the database points at its AIFF (the server still has it). Add hot cues gives the imported tracks hot cues as Auto hot cues does. Those cues sit on rekordbox's own phrase analysis, which a new track only has once rekordbox has analysed it, so the tracks wait in a queue: the cues are written the next time the app opens the library with rekordbox closed, or from "Add hot cues now" on the Navidrome page. A track rekordbox has not analysed yet stays queued.
+
 ## [0.7.0-beta.9] - 2026-09-30
 
 ### 🎉 New Features
