@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-beta.11] - 2026-11-13
+
+### 🎉 New Features
+- **Clean up converted originals**: Maintenance's Clean up converted FLACs now finds a WAV or an M4A left beside the AIFF or WAV the library uses, as well as a FLAC, and moves it to the trash under the same rules: no entry points at it, an entry points at the file beside it, and the two decode to the same audio. An AAC M4A is compared at the depth its AIFF holds, since AAC decodes to more precision than a PCM file keeps; from FLAC, WAV and ALAC the comparison stays strict, so an AIFF that dropped bits from a 24-bit original never counts as the same.
+
 ## [0.7.0-beta.10] - 2026-11-13
 
 ### 🎉 New Features
